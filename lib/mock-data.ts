@@ -1,33 +1,54 @@
-// ─── Team Members ────────────────────────────────────────────────────────────
+// ─── Primitive types ──────────────────────────────────────────────────────────
 
-export type Status = "online" | "away" | "offline";
-export type Priority = "critical" | "high" | "medium" | "low";
-export type TaskStatus = "todo" | "in_progress" | "review" | "done" | "blocked";
+export type UserRole     = "admin" | "manager" | "employee";
+export type OnlineStatus = "online" | "away" | "offline";
+export type Priority     = "critical" | "high" | "medium" | "low";
+export type TaskStatus   = "not_started" | "in_progress" | "blocked" | "done";
 
-export interface TeamMember {
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+export interface User {
   id: string;
   name: string;
-  role: string;
+  /** Structured app role — drives permissions in future phases. */
+  role: UserRole;
+  /** Human-readable job title, e.g. "Product Designer". */
+  jobTitle: string;
   department: string;
-  avatar: string;
   initials: string;
-  status: Status;
-  workload: number; // 0-100
+  onlineStatus: OnlineStatus;
+  workload: number;       // 0–100 — percentage of capacity currently used
   tasksAssigned: number;
   tasksCompleted: number;
-  availability: number; // hours per week
+  availability: number;   // scheduled hours per week
   email: string;
 }
 
-export const teamMembers: TeamMember[] = [
+export const users: User[] = [
+  // ── u0: logged-in admin (Sarah Chen) ───────────────────────────────────────
   {
-    id: "tm1",
+    id: "u0",
+    name: "Sarah Chen",
+    role: "admin",
+    jobTitle: "Head of Operations",
+    department: "Operations",
+    initials: "SC",
+    onlineStatus: "online",
+    workload: 45,
+    tasksAssigned: 3,
+    tasksCompleted: 2,
+    availability: 40,
+    email: "s.chen@acmecorp.com",
+  },
+  // ── u1–u8: team members ────────────────────────────────────────────────────
+  {
+    id: "u1",
     name: "Olivia Chen",
-    role: "Product Designer",
+    role: "employee",
+    jobTitle: "Product Designer",
     department: "Design",
-    avatar: "",
     initials: "OC",
-    status: "online",
+    onlineStatus: "online",
     workload: 92,
     tasksAssigned: 14,
     tasksCompleted: 9,
@@ -35,13 +56,13 @@ export const teamMembers: TeamMember[] = [
     email: "o.chen@company.com",
   },
   {
-    id: "tm2",
+    id: "u2",
     name: "James Kwon",
-    role: "Engineering Lead",
+    role: "manager",
+    jobTitle: "Engineering Lead",
     department: "Engineering",
-    avatar: "",
     initials: "JK",
-    status: "online",
+    onlineStatus: "online",
     workload: 78,
     tasksAssigned: 11,
     tasksCompleted: 7,
@@ -49,13 +70,13 @@ export const teamMembers: TeamMember[] = [
     email: "j.kwon@company.com",
   },
   {
-    id: "tm3",
+    id: "u3",
     name: "Priya Nair",
-    role: "Product Manager",
+    role: "manager",
+    jobTitle: "Product Manager",
     department: "Product",
-    avatar: "",
     initials: "PN",
-    status: "away",
+    onlineStatus: "away",
     workload: 55,
     tasksAssigned: 8,
     tasksCompleted: 6,
@@ -63,13 +84,13 @@ export const teamMembers: TeamMember[] = [
     email: "p.nair@company.com",
   },
   {
-    id: "tm4",
+    id: "u4",
     name: "Marcus Reid",
-    role: "Marketing Lead",
+    role: "manager",
+    jobTitle: "Marketing Lead",
     department: "Marketing",
-    avatar: "",
     initials: "MR",
-    status: "online",
+    onlineStatus: "online",
     workload: 38,
     tasksAssigned: 6,
     tasksCompleted: 5,
@@ -77,13 +98,13 @@ export const teamMembers: TeamMember[] = [
     email: "m.reid@company.com",
   },
   {
-    id: "tm5",
+    id: "u5",
     name: "Sofia Alvarez",
-    role: "Frontend Engineer",
+    role: "employee",
+    jobTitle: "Frontend Engineer",
     department: "Engineering",
-    avatar: "",
     initials: "SA",
-    status: "online",
+    onlineStatus: "online",
     workload: 67,
     tasksAssigned: 9,
     tasksCompleted: 5,
@@ -91,13 +112,13 @@ export const teamMembers: TeamMember[] = [
     email: "s.alvarez@company.com",
   },
   {
-    id: "tm6",
+    id: "u6",
     name: "Ethan Brooks",
-    role: "Data Analyst",
+    role: "employee",
+    jobTitle: "Data Analyst",
     department: "Analytics",
-    avatar: "",
     initials: "EB",
-    status: "offline",
+    onlineStatus: "offline",
     workload: 44,
     tasksAssigned: 7,
     tasksCompleted: 6,
@@ -105,13 +126,13 @@ export const teamMembers: TeamMember[] = [
     email: "e.brooks@company.com",
   },
   {
-    id: "tm7",
+    id: "u7",
     name: "Aisha Okafor",
-    role: "Backend Engineer",
+    role: "employee",
+    jobTitle: "Backend Engineer",
     department: "Engineering",
-    avatar: "",
     initials: "AO",
-    status: "online",
+    onlineStatus: "online",
     workload: 81,
     tasksAssigned: 12,
     tasksCompleted: 8,
@@ -119,13 +140,13 @@ export const teamMembers: TeamMember[] = [
     email: "a.okafor@company.com",
   },
   {
-    id: "tm8",
+    id: "u8",
     name: "David Park",
-    role: "Customer Success",
+    role: "employee",
+    jobTitle: "Customer Success",
     department: "CS",
-    avatar: "",
     initials: "DP",
-    status: "away",
+    onlineStatus: "away",
     workload: 60,
     tasksAssigned: 9,
     tasksCompleted: 7,
@@ -134,21 +155,180 @@ export const teamMembers: TeamMember[] = [
   },
 ];
 
+/**
+ * Backwards-compatibility alias.
+ * planner/page.tsx imports `teamMembers` and only accesses id, name, initials —
+ * all of which are unchanged. This alias keeps that page working without edits.
+ */
+export const teamMembers = users.filter((u) => u.id !== "u0");
+
+// ─── Teams ────────────────────────────────────────────────────────────────────
+
+export interface Team {
+  id: string;
+  name: string;
+  department: string;
+  memberIds: string[];
+  managerId: string;
+}
+
+export const teams: Team[] = [
+  {
+    id: "team-eng",
+    name: "Engineering",
+    department: "Engineering",
+    memberIds: ["u2", "u5", "u7"],
+    managerId: "u2",
+  },
+  {
+    id: "team-design",
+    name: "Design",
+    department: "Design",
+    memberIds: ["u1"],
+    managerId: "u1",
+  },
+  {
+    id: "team-product",
+    name: "Product",
+    department: "Product",
+    memberIds: ["u3"],
+    managerId: "u3",
+  },
+  {
+    id: "team-mkt",
+    name: "Marketing",
+    department: "Marketing",
+    memberIds: ["u4"],
+    managerId: "u4",
+  },
+  {
+    id: "team-data",
+    name: "Analytics",
+    department: "Analytics",
+    memberIds: ["u6"],
+    managerId: "u6",
+  },
+  {
+    id: "team-cs",
+    name: "Customer Success",
+    department: "CS",
+    memberIds: ["u8"],
+    managerId: "u8",
+  },
+];
+
+// ─── Projects ─────────────────────────────────────────────────────────────────
+
+export interface Project {
+  id: string;
+  name: string;
+  teamId: string;
+  description: string;
+  color: string;  // Tailwind colour key, e.g. "indigo"
+  status: "active" | "paused" | "completed";
+}
+
+export const projects: Project[] = [
+  {
+    id: "proj-platform-v24",
+    name: "Platform v2.4",
+    teamId: "team-eng",
+    description: "Core platform stability and feature work for Q2.",
+    color: "indigo",
+    status: "active",
+  },
+  {
+    id: "proj-platform-sec",
+    name: "Platform Security",
+    teamId: "team-eng",
+    description: "Security hardening: rate limiting, auth modernisation.",
+    color: "red",
+    status: "active",
+  },
+  {
+    id: "proj-product-v24",
+    name: "Product v2.4",
+    teamId: "team-design",
+    description: "Onboarding and UX improvements for v2.4.",
+    color: "violet",
+    status: "active",
+  },
+  {
+    id: "proj-design-sys",
+    name: "Design System",
+    teamId: "team-design",
+    description: "Component audit and documentation.",
+    color: "purple",
+    status: "active",
+  },
+  {
+    id: "proj-q-plan",
+    name: "Quarterly Planning",
+    teamId: "team-product",
+    description: "Q2 roadmap, competitive analysis.",
+    color: "blue",
+    status: "active",
+  },
+  {
+    id: "proj-mkt-q2",
+    name: "Marketing Q2",
+    teamId: "team-mkt",
+    description: "Spring campaigns and content.",
+    color: "amber",
+    status: "active",
+  },
+  {
+    id: "proj-data-plat",
+    name: "Data Platform",
+    teamId: "team-data",
+    description: "Internal analytics tooling.",
+    color: "emerald",
+    status: "active",
+  },
+  {
+    id: "proj-cs-q2",
+    name: "CS Q2",
+    teamId: "team-cs",
+    description: "Customer success and retention.",
+    color: "rose",
+    status: "active",
+  },
+];
+
 // ─── Tasks ────────────────────────────────────────────────────────────────────
+
+export interface Comment {
+  id: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+  /** "comment" = user-written note; "activity" = system-generated event log */
+  type?: "comment" | "activity";
+}
 
 export interface Task {
   id: string;
   title: string;
   description: string;
-  assignee: string; // TeamMember id
-  priority: Priority;
+  /** The single person responsible for delivering this task. */
+  primaryOwnerId: string;
+  /** Others actively working on or reviewing this task. */
+  collaboratorIds: string[];
+  /** Who created the task. */
+  creatorId: string;
+  teamId: string;
+  projectId: string;
   status: TaskStatus;
+  priority: Priority;
   dueDate: string;
+  /** Required when status === "blocked". Explains the blocker. */
+  blockedReason?: string;
   tags: string[];
   estimatedHours: number;
   loggedHours: number;
-  project: string;
+  comments: Comment[];
   createdAt: string;
+  updatedAt: string;
 }
 
 export const tasks: Task[] = [
@@ -156,169 +336,230 @@ export const tasks: Task[] = [
     id: "t1",
     title: "Redesign onboarding flow",
     description: "Rework the user onboarding screens to improve activation rate.",
-    assignee: "tm1",
-    priority: "high",
+    primaryOwnerId: "u1",
+    collaboratorIds: ["u3"],
+    creatorId: "u3",
+    teamId: "team-design",
+    projectId: "proj-product-v24",
     status: "in_progress",
+    priority: "high",
     dueDate: "2026-04-15",
     tags: ["design", "ux"],
     estimatedHours: 16,
     loggedHours: 9,
-    project: "Product v2.4",
+    comments: [],
     createdAt: "2026-04-01",
+    updatedAt: "2026-04-11",
   },
   {
     id: "t2",
     title: "API rate limiting implementation",
     description: "Add per-tenant rate limiting middleware to the gateway.",
-    assignee: "tm2",
-    priority: "critical",
+    primaryOwnerId: "u2",
+    collaboratorIds: ["u7"],
+    creatorId: "u2",
+    teamId: "team-eng",
+    projectId: "proj-platform-sec",
     status: "in_progress",
+    priority: "critical",
     dueDate: "2026-04-13",
     tags: ["engineering", "infra"],
     estimatedHours: 8,
     loggedHours: 3,
-    project: "Platform Security",
+    comments: [],
     createdAt: "2026-04-02",
+    updatedAt: "2026-04-10",
   },
   {
     id: "t3",
     title: "Q2 roadmap presentation",
     description: "Prepare slides for the Q2 roadmap board presentation.",
-    assignee: "tm3",
+    primaryOwnerId: "u3",
+    collaboratorIds: [],
+    creatorId: "u3",
+    teamId: "team-product",
+    projectId: "proj-q-plan",
+    status: "in_progress",  // was: "review" — merged into in_progress
     priority: "high",
-    status: "review",
     dueDate: "2026-04-14",
     tags: ["product", "strategy"],
     estimatedHours: 6,
     loggedHours: 5,
-    project: "Quarterly Planning",
+    comments: [],
     createdAt: "2026-04-03",
+    updatedAt: "2026-04-11",
   },
   {
     id: "t4",
     title: "Launch email campaign — Spring promo",
     description: "Set up and QA the Spring promotional email sequence.",
-    assignee: "tm4",
+    primaryOwnerId: "u4",
+    collaboratorIds: [],
+    creatorId: "u4",
+    teamId: "team-mkt",
+    projectId: "proj-mkt-q2",
+    status: "not_started",  // was: "todo"
     priority: "medium",
-    status: "todo",
     dueDate: "2026-04-18",
     tags: ["marketing", "email"],
     estimatedHours: 5,
     loggedHours: 0,
-    project: "Marketing Q2",
+    comments: [],
     createdAt: "2026-04-04",
+    updatedAt: "2026-04-04",
   },
   {
     id: "t5",
     title: "Fix dashboard chart render bug",
     description: "Charts flicker on load in Safari. Traced to hydration mismatch.",
-    assignee: "tm5",
-    priority: "critical",
+    primaryOwnerId: "u5",
+    collaboratorIds: ["u2"],
+    creatorId: "u5",
+    teamId: "team-eng",
+    projectId: "proj-platform-v24",
     status: "blocked",
+    priority: "critical",
     dueDate: "2026-04-12",
+    blockedReason: "Waiting on Safari reproduction environment from DevOps.",
     tags: ["engineering", "bug"],
     estimatedHours: 4,
     loggedHours: 2,
-    project: "Platform v2.4",
+    comments: [],
     createdAt: "2026-04-05",
+    updatedAt: "2026-04-10",
   },
   {
     id: "t6",
     title: "Usage analytics dashboard",
     description: "Build internal dashboard to track feature adoption metrics.",
-    assignee: "tm6",
-    priority: "medium",
+    primaryOwnerId: "u6",
+    collaboratorIds: [],
+    creatorId: "u6",
+    teamId: "team-data",
+    projectId: "proj-data-plat",
     status: "in_progress",
+    priority: "medium",
     dueDate: "2026-04-20",
     tags: ["analytics", "data"],
     estimatedHours: 12,
     loggedHours: 4,
-    project: "Data Platform",
+    comments: [],
     createdAt: "2026-04-02",
+    updatedAt: "2026-04-10",
   },
   {
     id: "t7",
     title: "Migrate auth service to new JWT library",
     description: "Replace legacy auth library with jose for better edge support.",
-    assignee: "tm7",
+    primaryOwnerId: "u7",
+    collaboratorIds: [],
+    creatorId: "u2",
+    teamId: "team-eng",
+    projectId: "proj-platform-sec",
+    status: "not_started",  // was: "todo"
     priority: "high",
-    status: "todo",
     dueDate: "2026-04-22",
     tags: ["engineering", "auth"],
     estimatedHours: 10,
     loggedHours: 0,
-    project: "Platform Security",
+    comments: [],
     createdAt: "2026-04-06",
+    updatedAt: "2026-04-06",
   },
   {
     id: "t8",
     title: "Churn risk follow-up calls",
     description: "Reach out to 12 at-risk accounts identified in last week's review.",
-    assignee: "tm8",
-    priority: "high",
+    primaryOwnerId: "u8",
+    collaboratorIds: [],
+    creatorId: "u8",
+    teamId: "team-cs",
+    projectId: "proj-cs-q2",
     status: "in_progress",
+    priority: "high",
     dueDate: "2026-04-13",
     tags: ["customer-success", "retention"],
     estimatedHours: 6,
     loggedHours: 2,
-    project: "CS Q2",
+    comments: [],
     createdAt: "2026-04-07",
+    updatedAt: "2026-04-10",
   },
   {
     id: "t9",
     title: "Design system component audit",
     description: "Document all inconsistencies across the design system.",
-    assignee: "tm1",
+    primaryOwnerId: "u1",
+    collaboratorIds: [],
+    creatorId: "u1",
+    teamId: "team-design",
+    projectId: "proj-design-sys",
+    status: "not_started",  // was: "todo"
     priority: "medium",
-    status: "todo",
     dueDate: "2026-04-25",
     tags: ["design", "system"],
     estimatedHours: 8,
     loggedHours: 0,
-    project: "Design System",
+    comments: [],
     createdAt: "2026-04-06",
+    updatedAt: "2026-04-06",
   },
   {
     id: "t10",
     title: "Set up CI/CD for new microservice",
     description: "Configure GitHub Actions pipeline for the new notifications service.",
-    assignee: "tm2",
-    priority: "high",
+    primaryOwnerId: "u2",
+    collaboratorIds: [],
+    creatorId: "u2",
+    teamId: "team-eng",
+    projectId: "proj-platform-v24",
     status: "done",
+    priority: "high",
     dueDate: "2026-04-10",
     tags: ["engineering", "devops"],
     estimatedHours: 5,
     loggedHours: 5,
-    project: "Platform v2.4",
+    comments: [],
     createdAt: "2026-04-01",
+    updatedAt: "2026-04-10",
   },
   {
     id: "t11",
     title: "Competitor feature analysis",
     description: "Map competitors' new feature releases against our roadmap gaps.",
-    assignee: "tm3",
+    primaryOwnerId: "u3",
+    collaboratorIds: [],
+    creatorId: "u3",
+    teamId: "team-product",
+    projectId: "proj-q-plan",
+    status: "not_started",  // was: "todo"
     priority: "low",
-    status: "todo",
     dueDate: "2026-04-28",
     tags: ["product", "research"],
     estimatedHours: 6,
     loggedHours: 0,
-    project: "Quarterly Planning",
+    comments: [],
     createdAt: "2026-04-07",
+    updatedAt: "2026-04-07",
   },
   {
     id: "t12",
     title: "Refactor billing module",
     description: "Decompose the monolithic billing code into discrete service calls.",
-    assignee: "tm7",
-    priority: "medium",
+    primaryOwnerId: "u7",
+    collaboratorIds: ["u5"],
+    creatorId: "u7",
+    teamId: "team-eng",
+    projectId: "proj-platform-v24",
     status: "in_progress",
+    priority: "medium",
     dueDate: "2026-04-24",
     tags: ["engineering", "refactor"],
     estimatedHours: 14,
     loggedHours: 5,
-    project: "Platform v2.4",
+    comments: [],
     createdAt: "2026-04-03",
+    updatedAt: "2026-04-10",
   },
 ];
 
@@ -340,7 +581,7 @@ export const aiInsights: AIInsight[] = [
     title: "Olivia is overloaded this week",
     body: "Olivia has 14 active tasks and 92% workload. Two non-critical tasks can be moved to next week without impacting deadlines.",
     action: "Rebalance tasks",
-    affectedMember: "tm1",
+    affectedMember: "u1",
   },
   {
     id: "ai2",
@@ -355,7 +596,7 @@ export const aiInsights: AIInsight[] = [
     title: "Marketing team has unused capacity",
     body: "Marcus has 40% capacity available this week. Consider assigning the social campaign brief that's currently unowned.",
     action: "Assign task",
-    affectedMember: "tm4",
+    affectedMember: "u4",
   },
   {
     id: "ai4",
@@ -391,14 +632,14 @@ export interface ActivityItem {
 }
 
 export const activityFeed: ActivityItem[] = [
-  { id: "a1", actor: "James Kwon", action: "completed", target: "Set up CI/CD pipeline", time: "2026-04-11T08:14:00", type: "complete" },
-  { id: "a2", actor: "Priya Nair", action: "moved to review", target: "Q2 roadmap presentation", time: "2026-04-11T07:50:00", type: "task" },
-  { id: "a3", actor: "Olivia Chen", action: "logged 3h on", target: "Redesign onboarding flow", time: "2026-04-11T07:30:00", type: "task" },
-  { id: "a4", actor: "Aisha Okafor", action: "created task", target: "Refactor billing module", time: "2026-04-10T17:20:00", type: "create" },
-  { id: "a5", actor: "Marcus Reid", action: "commented on", target: "Spring promo campaign", time: "2026-04-10T16:45:00", type: "comment" },
-  { id: "a6", actor: "Sofia Alvarez", action: "assigned to herself", target: "Fix dashboard chart bug", time: "2026-04-10T15:10:00", type: "assign" },
-  { id: "a7", actor: "David Park", action: "updated status on", target: "Churn risk follow-up calls", time: "2026-04-10T14:00:00", type: "task" },
-  { id: "a8", actor: "Ethan Brooks", action: "logged 2h on", target: "Usage analytics dashboard", time: "2026-04-10T13:30:00", type: "task" },
+  { id: "a1", actor: "James Kwon",    action: "completed",          target: "Set up CI/CD pipeline",         time: "2026-04-11T08:14:00", type: "complete" },
+  { id: "a2", actor: "Priya Nair",    action: "moved to in progress", target: "Q2 roadmap presentation",     time: "2026-04-11T07:50:00", type: "task" },
+  { id: "a3", actor: "Olivia Chen",   action: "logged 3h on",       target: "Redesign onboarding flow",      time: "2026-04-11T07:30:00", type: "task" },
+  { id: "a4", actor: "Aisha Okafor",  action: "created task",       target: "Refactor billing module",       time: "2026-04-10T17:20:00", type: "create" },
+  { id: "a5", actor: "Marcus Reid",   action: "commented on",       target: "Spring promo campaign",         time: "2026-04-10T16:45:00", type: "comment" },
+  { id: "a6", actor: "Sofia Alvarez", action: "assigned to herself", target: "Fix dashboard chart bug",      time: "2026-04-10T15:10:00", type: "assign" },
+  { id: "a7", actor: "David Park",    action: "updated status on",  target: "Churn risk follow-up calls",    time: "2026-04-10T14:00:00", type: "task" },
+  { id: "a8", actor: "Ethan Brooks",  action: "logged 2h on",       target: "Usage analytics dashboard",     time: "2026-04-10T13:30:00", type: "task" },
 ];
 
 // ─── Analytics ────────────────────────────────────────────────────────────────
@@ -417,31 +658,31 @@ export const weeklyCompletionData = [
 ];
 
 export const workloadDistributionData = [
-  { name: "Olivia Chen", workload: 92, tasks: 14 },
-  { name: "James Kwon", workload: 78, tasks: 11 },
-  { name: "Aisha Okafor", workload: 81, tasks: 12 },
-  { name: "Sofia Alvarez", workload: 67, tasks: 9 },
-  { name: "David Park", workload: 60, tasks: 9 },
-  { name: "Priya Nair", workload: 55, tasks: 8 },
-  { name: "Ethan Brooks", workload: 44, tasks: 7 },
-  { name: "Marcus Reid", workload: 38, tasks: 6 },
+  { name: "Olivia Chen",   workload: 92, tasks: 14 },
+  { name: "James Kwon",    workload: 78, tasks: 11 },
+  { name: "Aisha Okafor",  workload: 81, tasks: 12 },
+  { name: "Sofia Alvarez", workload: 67, tasks: 9  },
+  { name: "David Park",    workload: 60, tasks: 9  },
+  { name: "Priya Nair",    workload: 55, tasks: 8  },
+  { name: "Ethan Brooks",  workload: 44, tasks: 7  },
+  { name: "Marcus Reid",   workload: 38, tasks: 6  },
 ];
 
+// 4-status breakdown — "Review" removed, merged into "In Progress"
 export const taskStatusBreakdown = [
-  { name: "Done", value: 14, color: "#10b981" },
-  { name: "In Progress", value: 28, color: "#4f46e5" },
-  { name: "Review", value: 8, color: "#f59e0b" },
-  { name: "Blocked", value: 5, color: "#ef4444" },
-  { name: "To Do", value: 17, color: "#94a3b8" },
+  { name: "Done",        value: 14, color: "#10b981" },
+  { name: "In Progress", value: 36, color: "#4f46e5" },
+  { name: "Blocked",     value: 5,  color: "#ef4444" },
+  { name: "Not Started", value: 17, color: "#94a3b8" },
 ];
 
 export const departmentVelocity = [
   { dept: "Engineering", velocity: 87, target: 80 },
-  { dept: "Design", velocity: 72, target: 75 },
-  { dept: "Product", velocity: 91, target: 85 },
-  { dept: "Marketing", velocity: 65, target: 70 },
-  { dept: "Analytics", velocity: 78, target: 75 },
-  { dept: "CS", velocity: 84, target: 80 },
+  { dept: "Design",      velocity: 72, target: 75 },
+  { dept: "Product",     velocity: 91, target: 85 },
+  { dept: "Marketing",   velocity: 65, target: 70 },
+  { dept: "Analytics",   velocity: 78, target: 75 },
+  { dept: "CS",          velocity: 84, target: 80 },
 ];
 
 // ─── Planner / Schedule ───────────────────────────────────────────────────────
@@ -449,8 +690,8 @@ export const departmentVelocity = [
 export interface ScheduleBlock {
   id: string;
   title: string;
-  member: string;
-  day: number; // 0=Mon … 4=Fri
+  member: string;   // user id
+  day: number;      // 0 = Mon … 4 = Fri
   startHour: number;
   duration: number; // hours
   type: "task" | "meeting" | "focus" | "blocked";
@@ -458,22 +699,22 @@ export interface ScheduleBlock {
 }
 
 export const scheduleBlocks: ScheduleBlock[] = [
-  { id: "sb1", title: "Onboarding redesign", member: "tm1", day: 0, startHour: 9, duration: 3, type: "task", color: "indigo" },
-  { id: "sb2", title: "Design review", member: "tm1", day: 2, startHour: 14, duration: 1, type: "meeting", color: "violet" },
-  { id: "sb3", title: "Component audit", member: "tm1", day: 4, startHour: 10, duration: 2, type: "task", color: "indigo" },
-  { id: "sb4", title: "API rate limiting", member: "tm2", day: 0, startHour: 10, duration: 4, type: "focus", color: "blue" },
-  { id: "sb5", title: "CI/CD setup", member: "tm2", day: 1, startHour: 9, duration: 3, type: "task", color: "blue" },
-  { id: "sb6", title: "Eng sync", member: "tm2", day: 2, startHour: 10, duration: 1, type: "meeting", color: "violet" },
-  { id: "sb7", title: "Roadmap prep", member: "tm3", day: 0, startHour: 9, duration: 2, type: "task", color: "indigo" },
-  { id: "sb8", title: "Stakeholder 1:1", member: "tm3", day: 1, startHour: 14, duration: 1, type: "meeting", color: "violet" },
-  { id: "sb9", title: "Spring campaign", member: "tm4", day: 1, startHour: 10, duration: 3, type: "task", color: "indigo" },
-  { id: "sb10", title: "Chart bug fix", member: "tm5", day: 0, startHour: 14, duration: 2, type: "task", color: "red" },
-  { id: "sb11", title: "Frontend deep work", member: "tm5", day: 2, startHour: 9, duration: 4, type: "focus", color: "blue" },
-  { id: "sb12", title: "Analytics build", member: "tm6", day: 0, startHour: 13, duration: 3, type: "task", color: "indigo" },
-  { id: "sb13", title: "Auth migration", member: "tm7", day: 1, startHour: 9, duration: 4, type: "focus", color: "blue" },
-  { id: "sb14", title: "Billing refactor", member: "tm7", day: 3, startHour: 10, duration: 4, type: "task", color: "indigo" },
-  { id: "sb15", title: "Churn follow-ups", member: "tm8", day: 0, startHour: 10, duration: 2, type: "task", color: "indigo" },
-  { id: "sb16", title: "CS team standup", member: "tm8", day: 2, startHour: 9, duration: 1, type: "meeting", color: "violet" },
+  { id: "sb1",  title: "Onboarding redesign",   member: "u1", day: 0, startHour: 9,  duration: 3, type: "task",    color: "indigo" },
+  { id: "sb2",  title: "Design review",          member: "u1", day: 2, startHour: 14, duration: 1, type: "meeting", color: "violet" },
+  { id: "sb3",  title: "Component audit",        member: "u1", day: 4, startHour: 10, duration: 2, type: "task",    color: "indigo" },
+  { id: "sb4",  title: "API rate limiting",      member: "u2", day: 0, startHour: 10, duration: 4, type: "focus",   color: "blue"   },
+  { id: "sb5",  title: "CI/CD setup",            member: "u2", day: 1, startHour: 9,  duration: 3, type: "task",    color: "blue"   },
+  { id: "sb6",  title: "Eng sync",               member: "u2", day: 2, startHour: 10, duration: 1, type: "meeting", color: "violet" },
+  { id: "sb7",  title: "Roadmap prep",           member: "u3", day: 0, startHour: 9,  duration: 2, type: "task",    color: "indigo" },
+  { id: "sb8",  title: "Stakeholder 1:1",        member: "u3", day: 1, startHour: 14, duration: 1, type: "meeting", color: "violet" },
+  { id: "sb9",  title: "Spring campaign",        member: "u4", day: 1, startHour: 10, duration: 3, type: "task",    color: "indigo" },
+  { id: "sb10", title: "Chart bug fix",          member: "u5", day: 0, startHour: 14, duration: 2, type: "task",    color: "red"    },
+  { id: "sb11", title: "Frontend deep work",     member: "u5", day: 2, startHour: 9,  duration: 4, type: "focus",   color: "blue"   },
+  { id: "sb12", title: "Analytics build",        member: "u6", day: 0, startHour: 13, duration: 3, type: "task",    color: "indigo" },
+  { id: "sb13", title: "Auth migration",         member: "u7", day: 1, startHour: 9,  duration: 4, type: "focus",   color: "blue"   },
+  { id: "sb14", title: "Billing refactor",       member: "u7", day: 3, startHour: 10, duration: 4, type: "task",    color: "indigo" },
+  { id: "sb15", title: "Churn follow-ups",       member: "u8", day: 0, startHour: 10, duration: 2, type: "task",    color: "indigo" },
+  { id: "sb16", title: "CS team standup",        member: "u8", day: 2, startHour: 9,  duration: 1, type: "meeting", color: "violet" },
 ];
 
 // ─── Testimonials ─────────────────────────────────────────────────────────────
