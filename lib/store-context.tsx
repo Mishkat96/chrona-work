@@ -16,6 +16,7 @@ import {
   type Team,
   type Comment,
   type UserRole,
+  type ScheduleBlock,
   // Static seed data kept as fallback if Supabase is unreachable
   users   as mockUsers,
   projects as mockProjects,
@@ -38,6 +39,14 @@ import {
 }                                            from "./repositories/users";
 import { fetchProjects }                     from "./repositories/projects";
 import { createWorkspace, fetchWorkspace }   from "./repositories/workspaces";
+import {
+  fetchBlocksForWeek,
+  createBlockInDb,
+  updateBlockInDb,
+  deleteBlockInDb,
+  type NewBlockDraft,
+} from "./repositories/schedule-blocks";
+import { getWeekStart, getWeekEnd } from "./planner-selectors";
 import {
   fetchTeams,
   createTeamInDb,
@@ -80,6 +89,7 @@ function saveDevUserId(id: string): void {
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export type NewTaskDraft = Omit<Task, "id" | "createdAt" | "updatedAt" | "comments">;
+export type { NewBlockDraft };
 
 export interface TeamDraft {
   name: string;
@@ -119,6 +129,15 @@ interface ContextValue {
   updateUserRole: (userId: string, role: UserRole) => Promise<void>;
   /** Dev-only: switch the active user without real auth. */
   switchUser: (userId: string) => void;
+
+  // ─ Planner / Schedule blocks
+  scheduleBlocks: ScheduleBlock[];
+  plannerLoading: boolean;
+  /** Replace the loaded schedule blocks with those for a new week. */
+  loadWeekBlocks: (weekStart: Date) => Promise<void>;
+  createBlock:    (draft: NewBlockDraft) => Promise<ScheduleBlock | null>;
+  updateBlock:    (block: ScheduleBlock) => Promise<void>;
+  deleteBlock:    (id: string) => Promise<void>;
 }
 
 // ── Context ────────────────────────────────────────────────────────────────────
@@ -164,8 +183,10 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [workspaceId,   setWorkspaceId]   = useState<string>(WORKSPACE_ID);
   const [workspaceName, setWorkspaceName] = useState<string>("");
-  const [loading,     setLoading]     = useState(true);
-  const [error,       setError]       = useState<string | null>(null);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState<string | null>(null);
+  const [scheduleBlocks, setScheduleBlocks] = useState<ScheduleBlock[]>([]);
+  const [plannerLoading, setPlannerLoading] = useState(false);
 
   // ── Initial fetch ───────────────────────────────────────────────────────────
 
@@ -665,6 +686,83 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
     [currentUser]
   );
 
+  // ── loadWeekBlocks ──────────────────────────────────────────────────────────
+
+  const loadWeekBlocks = useCallback(
+    async (weekStart: Date): Promise<void> => {
+      if (!workspaceId) return;
+      setPlannerLoading(true);
+      try {
+        const weekEnd = getWeekEnd(weekStart);
+        const blocks = await fetchBlocksForWeek(workspaceId, weekStart, weekEnd);
+        setScheduleBlocks(blocks);
+      } catch (err) {
+        console.error("loadWeekBlocks failed:", err);
+      } finally {
+        setPlannerLoading(false);
+      }
+    },
+    [workspaceId]
+  );
+
+  // ── createBlock ─────────────────────────────────────────────────────────────
+
+  const createBlock = useCallback(
+    async (draft: NewBlockDraft): Promise<ScheduleBlock | null> => {
+      const optimisticId = genId("sb");
+      const now = nowIso();
+      const optimistic: ScheduleBlock = {
+        id:          optimisticId,
+        workspaceId: draft.workspaceId,
+        userId:      draft.userId,
+        taskId:      draft.taskId,
+        teamId:      draft.teamId,
+        kind:        draft.kind,
+        title:       draft.title,
+        startsAt:    draft.startsAt,
+        endsAt:      draft.endsAt,
+        createdBy:   draft.createdBy,
+        createdAt:   now,
+        updatedAt:   now,
+      };
+      setScheduleBlocks((prev) => [...prev, optimistic]);
+      try {
+        const real = await createBlockInDb(draft);
+        setScheduleBlocks((prev) =>
+          prev.map((b) => (b.id === optimisticId ? real : b))
+        );
+        return real;
+      } catch (err) {
+        console.error("createBlock failed:", err);
+        setScheduleBlocks((prev) => prev.filter((b) => b.id !== optimisticId));
+        return null;
+      }
+    },
+    []
+  );
+
+  // ── updateBlock ─────────────────────────────────────────────────────────────
+
+  const updateBlock = useCallback(async (block: ScheduleBlock): Promise<void> => {
+    setScheduleBlocks((prev) => prev.map((b) => (b.id === block.id ? block : b)));
+    try {
+      await updateBlockInDb(block);
+    } catch (err) {
+      console.error("updateBlock failed:", err);
+    }
+  }, []);
+
+  // ── deleteBlock ─────────────────────────────────────────────────────────────
+
+  const deleteBlock = useCallback(async (id: string): Promise<void> => {
+    setScheduleBlocks((prev) => prev.filter((b) => b.id !== id));
+    try {
+      await deleteBlockInDb(id);
+    } catch (err) {
+      console.error("deleteBlock failed:", err);
+    }
+  }, []);
+
   // ── Context value ───────────────────────────────────────────────────────────
 
   return (
@@ -692,6 +790,12 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         removeTeamMember,
         updateUserRole,
         switchUser,
+        scheduleBlocks,
+        plannerLoading,
+        loadWeekBlocks,
+        createBlock,
+        updateBlock,
+        deleteBlock,
       }}
     >
       {children}

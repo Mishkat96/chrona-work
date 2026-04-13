@@ -688,36 +688,25 @@ export const departmentVelocity = [
 ];
 
 // ─── Planner / Schedule ───────────────────────────────────────────────────────
+// Real schedule blocks are stored in Supabase (schedule_blocks table).
+// This type represents the app-layer shape after mapping from the DB row.
+
+export type BlockKind = "task" | "focus" | "meeting" | "blocked";
 
 export interface ScheduleBlock {
   id: string;
+  workspaceId: string;
+  userId: string;
+  taskId?: string;
+  teamId?: string;
+  kind: BlockKind;
   title: string;
-  member: string;   // user id
-  day: number;      // 0 = Mon … 4 = Fri
-  startHour: number;
-  duration: number; // hours
-  type: "task" | "meeting" | "focus" | "blocked";
-  color: string;
+  startsAt: string; // ISO 8601 timestamp (UTC)
+  endsAt: string;   // ISO 8601 timestamp (UTC)
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
 }
-
-export const scheduleBlocks: ScheduleBlock[] = [
-  { id: "sb1",  title: "Onboarding redesign",   member: "u1", day: 0, startHour: 9,  duration: 3, type: "task",    color: "indigo" },
-  { id: "sb2",  title: "Design review",          member: "u1", day: 2, startHour: 14, duration: 1, type: "meeting", color: "violet" },
-  { id: "sb3",  title: "Component audit",        member: "u1", day: 4, startHour: 10, duration: 2, type: "task",    color: "indigo" },
-  { id: "sb4",  title: "API rate limiting",      member: "u2", day: 0, startHour: 10, duration: 4, type: "focus",   color: "blue"   },
-  { id: "sb5",  title: "CI/CD setup",            member: "u2", day: 1, startHour: 9,  duration: 3, type: "task",    color: "blue"   },
-  { id: "sb6",  title: "Eng sync",               member: "u2", day: 2, startHour: 10, duration: 1, type: "meeting", color: "violet" },
-  { id: "sb7",  title: "Roadmap prep",           member: "u3", day: 0, startHour: 9,  duration: 2, type: "task",    color: "indigo" },
-  { id: "sb8",  title: "Stakeholder 1:1",        member: "u3", day: 1, startHour: 14, duration: 1, type: "meeting", color: "violet" },
-  { id: "sb9",  title: "Spring campaign",        member: "u4", day: 1, startHour: 10, duration: 3, type: "task",    color: "indigo" },
-  { id: "sb10", title: "Chart bug fix",          member: "u5", day: 0, startHour: 14, duration: 2, type: "task",    color: "red"    },
-  { id: "sb11", title: "Frontend deep work",     member: "u5", day: 2, startHour: 9,  duration: 4, type: "focus",   color: "blue"   },
-  { id: "sb12", title: "Analytics build",        member: "u6", day: 0, startHour: 13, duration: 3, type: "task",    color: "indigo" },
-  { id: "sb13", title: "Auth migration",         member: "u7", day: 1, startHour: 9,  duration: 4, type: "focus",   color: "blue"   },
-  { id: "sb14", title: "Billing refactor",       member: "u7", day: 3, startHour: 10, duration: 4, type: "task",    color: "indigo" },
-  { id: "sb15", title: "Churn follow-ups",       member: "u8", day: 0, startHour: 10, duration: 2, type: "task",    color: "indigo" },
-  { id: "sb16", title: "CS team standup",        member: "u8", day: 2, startHour: 9,  duration: 1, type: "meeting", color: "violet" },
-];
 
 // ─── Testimonials ─────────────────────────────────────────────────────────────
 
