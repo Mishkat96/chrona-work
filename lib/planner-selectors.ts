@@ -169,38 +169,37 @@ export function taskRemainingWork(task: Task, blocks: ScheduleBlock[]): number {
 // ── Unscheduled task selectors ─────────────────────────────────────────────────
 
 /**
- * Tasks assigned to `userId` that are not done and have no schedule block
- * in the provided `blocks` array (i.e. not scheduled in the loaded week).
+ * Tasks assigned to `userId` that are not done and still have remaining work
+ * after accounting for already-scheduled blocks.
+ * A task with any blocks but remaining hours > 0 is still "needs scheduling".
  */
 export function unscheduledTasksForUser(
   tasks: Task[],
   blocks: ScheduleBlock[],
   userId: string
 ): Task[] {
-  const scheduled = scheduledTaskIds(blocks);
   return tasks.filter(
     (t) =>
       (t.primaryOwnerId === userId || t.collaboratorIds.includes(userId)) &&
       t.status !== "done" &&
-      !scheduled.has(t.id)
+      taskRemainingWork(t, blocks) > 0
   );
 }
 
 /**
  * Critical or high-priority tasks across all visible tasks that are not done
- * and have no schedule block. Pass `userId` to narrow to a specific person.
+ * and still have remaining work. Pass `userId` to narrow to a specific person.
  */
 export function urgentUnscheduledTasks(
   tasks: Task[],
   blocks: ScheduleBlock[],
   userId?: string
 ): Task[] {
-  const scheduled = scheduledTaskIds(blocks);
   return tasks.filter(
     (t) =>
       (t.priority === "critical" || t.priority === "high") &&
       t.status !== "done" &&
-      !scheduled.has(t.id) &&
+      taskRemainingWork(t, blocks) > 0 &&
       (userId === undefined ||
         t.primaryOwnerId === userId ||
         t.collaboratorIds.includes(userId))
@@ -217,14 +216,14 @@ export function dueSoonUnscheduledTasks(
   daysAhead: number,
   userId?: string
 ): Task[] {
-  const scheduled = scheduledTaskIds(blocks);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const cutoff = new Date(today);
   cutoff.setDate(cutoff.getDate() + daysAhead);
 
   return tasks.filter((t) => {
-    if (t.status === "done" || scheduled.has(t.id) || !t.dueDate) return false;
+    if (t.status === "done" || !t.dueDate) return false;
+    if (taskRemainingWork(t, blocks) === 0) return false;
     const due = new Date(t.dueDate);
     if (due < today || due > cutoff) return false;
     if (userId && t.primaryOwnerId !== userId && !t.collaboratorIds.includes(userId))

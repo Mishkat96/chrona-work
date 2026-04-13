@@ -19,7 +19,7 @@ import {
   getWeekStart, addWeeks, formatWeekLabel, isoDate,
   unscheduledTasksForUser, urgentUnscheduledTasks,
   teamCapacitySummary, scheduledHoursForUser,
-  blockedTasksInSchedule, blockDurationHours,
+  blockedTasksInSchedule, blockDurationHours, taskRemainingWork,
 } from "@/lib/planner-selectors";
 import type { ScheduleBlock, BlockKind, Task, User } from "@/lib/mock-data";
 import type { NewBlockDraft } from "@/lib/store-context";
@@ -437,12 +437,11 @@ export default function PlannerPage() {
     if (filterUserId !== "all") {
       return unscheduledTasksForUser(visibleTasks, scheduleBlocks, filterUserId);
     }
-    // "All members" view — show unscheduled tasks for everyone in scope
+    // "All members" view — show tasks with remaining work for everyone in scope
     const allowedIds = new Set(plannerUsers.map((u) => u.id));
     return visibleTasks.filter((t) => {
       if (t.status === "done") return false;
-      const scheduledIds = new Set(scheduleBlocks.filter((b) => b.taskId).map((b) => b.taskId!));
-      if (scheduledIds.has(t.id)) return false;
+      if (taskRemainingWork(t, scheduleBlocks) === 0) return false;
       return allowedIds.has(t.primaryOwnerId) || t.collaboratorIds.some((id) => allowedIds.has(id));
     });
   }, [visibleTasks, scheduleBlocks, filterUserId, currentUser, plannerUsers]);

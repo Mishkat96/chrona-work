@@ -55,7 +55,9 @@ export interface NewBlockDraft {
 
 /**
  * Fetch all schedule blocks for a workspace that overlap a given week window.
- * A block is included if its starts_at falls within [weekStart, weekEnd).
+ * A block overlaps [weekStart, weekEnd) when:
+ *   starts_at < weekEnd  AND  ends_at > weekStart
+ * This correctly includes blocks that begin before Monday and run into the week.
  */
 export async function fetchBlocksForWeek(
   workspaceId: string,
@@ -66,8 +68,8 @@ export async function fetchBlocksForWeek(
     .from("schedule_blocks")
     .select("*")
     .eq("workspace_id", workspaceId)
-    .gte("starts_at", weekStart.toISOString())
     .lt("starts_at", weekEnd.toISOString())
+    .gt("ends_at", weekStart.toISOString())
     .order("starts_at");
 
   if (error) throw error;
