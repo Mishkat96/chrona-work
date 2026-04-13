@@ -331,7 +331,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
       setTasks((prev) => [optimistic, ...prev]);
 
       try {
-        const real = await createTaskInDb(draft, WORKSPACE_ID, currentUser.id);
+        const real = await createTaskInDb(draft, workspaceId, currentUser.id);
         setTasks((prev) =>
           prev.map((t) => (t.id === optimisticId ? real : t))
         );
@@ -341,7 +341,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         return optimistic;
       }
     },
-    [currentUser]
+    [currentUser, workspaceId]
   );
 
   // ── updateTask ──────────────────────────────────────────────────────────────
@@ -514,7 +514,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
 
     setLoading(true);
     try {
-      await deleteAllTasksInWorkspace(WORKSPACE_ID);
+      await deleteAllTasksInWorkspace(workspaceId);
 
       const seedResults: Task[] = [];
       for (const t of mockTasks) {
@@ -534,7 +534,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
           estimatedHours:  t.estimatedHours,
           loggedHours:     t.loggedHours,
         };
-        const created = await createTaskInDb(mapped, WORKSPACE_ID, currentUser.id);
+        const created = await createTaskInDb(mapped, workspaceId, currentUser.id);
         seedResults.push(created);
       }
       setTasks(seedResults);
@@ -556,14 +556,14 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [currentUser]);
+  }, [currentUser, workspaceId]);
 
   // ── createTeam ──────────────────────────────────────────────────────────────
 
   const createTeam = useCallback(
     async (draft: TeamDraft): Promise<Team | null> => {
       try {
-        const team = await createTeamInDb(draft, WORKSPACE_ID);
+        const team = await createTeamInDb(draft, workspaceId);
         setTeams((prev) => [...prev, team].sort((a, b) => a.name.localeCompare(b.name)));
         return team;
       } catch (err) {
@@ -571,7 +571,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         return null;
       }
     },
-    []
+    [workspaceId]
   );
 
   // ── updateTeam ──────────────────────────────────────────────────────────────
