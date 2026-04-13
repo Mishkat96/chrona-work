@@ -23,7 +23,7 @@ import { signOut } from "@/lib/auth";
 export function Sidebar() {
   const pathname = usePathname();
   const router   = useRouter();
-  const { visibleTasks, currentUser, users, resetDemo, switchUser } = useTasks();
+  const { visibleTasks, currentUser, users, resetDemo, switchUser, workspaceName } = useTasks();
 
   // Dev switcher is only shown when running on localhost.
   const [isLocalhost, setIsLocalhost] = useState(false);
@@ -70,10 +70,10 @@ export function Sidebar() {
       <div className="px-3 py-3 border-b border-border">
         <button className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-muted transition-colors text-left">
           <div className="w-6 h-6 rounded-md bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
-            A
+            {(workspaceName || "W")[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-foreground truncate">Acme Corp</p>
+            <p className="text-xs font-semibold text-foreground truncate">{workspaceName || "Workspace"}</p>
             <p className="text-xs text-muted-foreground">Growth plan</p>
           </div>
           <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />

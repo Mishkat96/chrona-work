@@ -37,7 +37,7 @@ import {
   createUserInDb,
 }                                            from "./repositories/users";
 import { fetchProjects }                     from "./repositories/projects";
-import { createWorkspace }                   from "./repositories/workspaces";
+import { createWorkspace, fetchWorkspace }   from "./repositories/workspaces";
 import {
   fetchTeams,
   createTeamInDb,
@@ -95,8 +95,9 @@ interface ContextValue {
   users:        User[];
   projects:     Project[];
   teams:        Team[];
-  currentUser:  User | null;
-  workspaceId:  string;
+  currentUser:   User | null;
+  workspaceId:   string;
+  workspaceName: string;
   loading:      boolean;
   error:        string | null;
 
@@ -161,7 +162,8 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   const [projects,    setProjects]    = useState<Project[]>([]);
   const [teams,       setTeams]       = useState<Team[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [workspaceId, setWorkspaceId] = useState<string>(WORKSPACE_ID);
+  const [workspaceId,   setWorkspaceId]   = useState<string>(WORKSPACE_ID);
+  const [workspaceName, setWorkspaceName] = useState<string>("");
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState<string | null>(null);
 
@@ -232,6 +234,11 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         setProjects(dbProjects);
         setTeams(dbTeams);
         setWorkspaceId(activeWorkspaceId);
+
+        // Fetch workspace name for display in sidebar
+        fetchWorkspace(activeWorkspaceId)
+          .then((ws) => { if (ws) setWorkspaceName(ws.name); })
+          .catch(() => {/* non-fatal */});
 
         // If we resolved via session, use that user (refreshed from the DB
         // list so counts / role are up-to-date).
@@ -670,6 +677,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         teams,
         currentUser,
         workspaceId,
+        workspaceName,
         loading,
         error,
         createTask,

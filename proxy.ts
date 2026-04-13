@@ -16,7 +16,7 @@ const PROTECTED_PREFIXES = [
 // Routes that should redirect to /dashboard when already signed in
 const AUTH_PREFIXES = ["/sign-in", "/sign-up"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

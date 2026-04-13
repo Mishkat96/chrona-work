@@ -1,49 +1,163 @@
 "use client";
 
+import { useMemo } from "react";
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, Legend
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
-import { TrendingUp, TrendingDown, CheckCircle2, Clock, AlertTriangle, Users } from "lucide-react";
+import { TrendingUp, CheckCircle2, Clock, AlertTriangle, Users } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  weeklyCompletionData, workloadDistributionData, taskStatusBreakdown,
-  departmentVelocity
-} from "@/lib/mock-data";
+import { useTasks } from "@/lib/store-context";
 
-const summaryStats = [
-  { label: "Avg completion rate", value: "84%", delta: "+4%", up: true, icon: CheckCircle2, color: "text-emerald-500", bg: "bg-emerald-50" },
-  { label: "Avg task duration", value: "2.8d", delta: "-0.4d", up: true, icon: Clock, color: "text-indigo-500", bg: "bg-indigo-50" },
-  { label: "Delayed tasks", value: "5", delta: "-2 vs prev", up: true, icon: AlertTriangle, color: "text-amber-500", bg: "bg-amber-50" },
-  { label: "Active contributors", value: "8", delta: "Full team", up: true, icon: Users, color: "text-violet-500", bg: "bg-violet-50" },
-];
+const STATUS_COLORS: Record<string, string> = {
+  not_started: "#94a3b8",
+  in_progress: "#4f46e5",
+  blocked:     "#ef4444",
+  done:        "#10b981",
+};
 
-const COLORS = taskStatusBreakdown.map((d) => d.color);
+const STATUS_LABELS: Record<string, string> = {
+  not_started: "Not Started",
+  in_progress: "In Progress",
+  blocked:     "Blocked",
+  done:        "Done",
+};
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="flex items-center justify-center h-[200px] text-sm text-muted-foreground">
+      {message}
+    </div>
+  );
+}
 
 export default function AnalyticsPage() {
+  const { tasks, users, teams } = useTasks();
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  // ── Summary stats ────────────────────────────────────────────────────────────
+  const summary = useMemo(() => {
+    const total = tasks.length;
+    const done  = tasks.filter((t) => t.status === "done").length;
+    const completionRate = total > 0 ? Math.round((done / total) * 100) : 0;
+    const delayed = tasks.filter(
+      (t) => t.dueDate && t.dueDate < today && t.status !== "done"
+    ).length;
+    const activeContributors = new Set(
+      [
+        ...tasks.map((t) => t.primaryOwnerId),
+        ...tasks.flatMap((t) => t.collaboratorIds),
+      ].filter(Boolean)
+    ).size;
+    return { total, done, completionRate, delayed, activeContributors };
+  }, [tasks, today]);
+
+  const summaryStats = [
+    {
+      label: "Completion rate",
+      value: summary.total > 0 ? `${summary.completionRate}%` : "—",
+      note:  `${summary.done} of ${summary.total} tasks done`,
+      up:    true,
+      icon:  CheckCircle2,
+      color: "text-emerald-500",
+      bg:    "bg-emerald-50",
+    },
+    {
+      label: "In progress",
+      value: String(tasks.filter((t) => t.status === "in_progress").length),
+      note:  "active tasks",
+      up:    true,
+      icon:  Clock,
+      color: "text-indigo-500",
+      bg:    "bg-indigo-50",
+    },
+    {
+      label: "Delayed tasks",
+      value: String(summary.delayed),
+      note:  summary.delayed === 0 ? "All on track" : "past due date",
+      up:    summary.delayed === 0,
+      icon:  AlertTriangle,
+      color: "text-amber-500",
+      bg:    "bg-amber-50",
+    },
+    {
+      label: "Active contributors",
+      value: String(summary.activeContributors),
+      note:  "with assigned tasks",
+      up:    true,
+      icon:  Users,
+      color: "text-violet-500",
+      bg:    "bg-violet-50",
+    },
+  ];
+
+  // ── Status breakdown (pie) ───────────────────────────────────────────────────
+  const statusBreakdown = useMemo(() => {
+    const counts: Record<string, number> = {
+      not_started: 0,
+      in_progress: 0,
+      blocked:     0,
+      done:        0,
+    };
+    for (const t of tasks) {
+      if (t.status in counts) counts[t.status]++;
+    }
+    return Object.entries(counts)
+      .map(([status, value]) => ({
+        name:  STATUS_LABELS[status] ?? status,
+        value,
+        color: STATUS_COLORS[status] ?? "#94a3b8",
+      }))
+      .filter((d) => d.value > 0);
+  }, [tasks]);
+
+  // ── Workload (horizontal bar) ────────────────────────────────────────────────
+  const workloadData = useMemo(() => {
+    // Count active (non-done) tasks per user as workload proxy
+    const taskCount: Record<string, number> = {};
+    for (const t of tasks) {
+      if (t.status === "done") continue;
+      if (t.primaryOwnerId) {
+        taskCount[t.primaryOwnerId] = (taskCount[t.primaryOwnerId] ?? 0) + 1;
+      }
+    }
+    return users
+      .filter((u) => taskCount[u.id] !== undefined)
+      .map((u) => ({
+        name:     u.name.split(" ")[0],
+        workload: taskCount[u.id] ?? 0,
+      }))
+      .sort((a, b) => b.workload - a.workload);
+  }, [tasks, users]);
+
+  // ── Velocity by team ─────────────────────────────────────────────────────────
+  const velocityData = useMemo(() => {
+    return teams
+      .map((team) => {
+        const teamTasks = tasks.filter((t) => t.teamId === team.id);
+        const done = teamTasks.filter((t) => t.status === "done").length;
+        const velocity =
+          teamTasks.length > 0 ? Math.round((done / teamTasks.length) * 100) : 0;
+        return { dept: team.name, velocity, total: teamTasks.length };
+      })
+      .filter((d) => d.total > 0);
+  }, [tasks, teams]);
+
   return (
     <div className="space-y-5 max-w-[1400px]">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-foreground">Analytics</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">Performance, velocity, and workload insights</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <select className="h-8 px-3 text-xs rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
-            <option>Last 10 weeks</option>
-            <option>Last quarter</option>
-            <option>Last 6 months</option>
-          </select>
-          <Badge variant="success" className="text-xs font-medium">Live data</Badge>
-        </div>
+      <div>
+        <h2 className="text-xl font-bold text-foreground">Analytics</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Live insights based on your workspace tasks
+        </p>
       </div>
 
       {/* Summary stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {summaryStats.map(({ label, value, delta, up, icon: Icon, color, bg }) => (
+        {summaryStats.map(({ label, value, note, up, icon: Icon, color, bg }) => (
           <Card key={label} className="hover:shadow-md transition-shadow">
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-3">
@@ -54,8 +168,8 @@ export default function AnalyticsPage() {
               </div>
               <div className="text-2xl font-bold text-foreground mb-1">{value}</div>
               <div className={`flex items-center gap-1 text-xs font-medium ${up ? "text-emerald-600" : "text-red-500"}`}>
-                {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                {delta}
+                <TrendingUp className="w-3 h-3" />
+                {note}
               </div>
             </CardContent>
           </Card>
@@ -69,148 +183,247 @@ export default function AnalyticsPage() {
           <TabsTrigger value="velocity">Velocity</TabsTrigger>
         </TabsList>
 
+        {/* Overview tab — status pie chart */}
         <TabsContent value="overview">
           <div className="grid grid-cols-12 gap-5">
-            {/* Completion trend */}
-            <Card className="col-span-12 lg:col-span-8">
+            <Card className="col-span-12 lg:col-span-6">
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Task Completion Trend</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Created vs completed · 10 weeks</p>
-                  </div>
-                  <Badge variant="success">+18% velocity</Badge>
-                </div>
+                <CardTitle>Task Status Breakdown</CardTitle>
+                <p className="text-xs text-muted-foreground">Across all tasks in your workspace</p>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={240}>
-                  <AreaChart data={weeklyCompletionData} margin={{ top: 4, right: 0, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="grad1" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.15} />
-                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="grad2" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#a78bfa" stopOpacity={0.1} />
-                        <stop offset="95%" stopColor="#a78bfa" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f5" vertical={false} />
-                    <XAxis dataKey="week" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ background: "white", border: "1px solid #e5e7f0", borderRadius: 8, fontSize: 12 }} />
-                    <Area type="monotone" dataKey="created" stroke="#a78bfa" strokeWidth={2} fill="url(#grad2)" name="Created" dot={false} />
-                    <Area type="monotone" dataKey="completed" stroke="#4f46e5" strokeWidth={2} fill="url(#grad1)" name="Completed" dot={false} />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {statusBreakdown.length === 0 ? (
+                  <EmptyState message="No tasks yet — create some to see data here." />
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie
+                          data={statusBreakdown}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={55}
+                          outerRadius={90}
+                          paddingAngle={3}
+                          dataKey="value"
+                        >
+                          {statusBreakdown.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            background: "white",
+                            border: "1px solid #e5e7f0",
+                            borderRadius: 8,
+                            fontSize: 12,
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="grid grid-cols-2 gap-y-2 gap-x-3 mt-3">
+                      {statusBreakdown.map(({ name, value, color }) => (
+                        <div key={name} className="flex items-center gap-1.5">
+                          <div
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ background: color }}
+                          />
+                          <span className="text-xs text-muted-foreground">{name}</span>
+                          <span className="text-xs font-semibold text-foreground ml-auto">{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 
-            {/* Status breakdown */}
-            <Card className="col-span-12 lg:col-span-4">
+            <Card className="col-span-12 lg:col-span-6">
               <CardHeader>
-                <CardTitle>Task Status Breakdown</CardTitle>
-                <p className="text-xs text-muted-foreground">Across all active projects</p>
+                <CardTitle>Task Counts by Status</CardTitle>
+                <p className="text-xs text-muted-foreground">Total tasks per stage</p>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={160}>
-                  <PieChart>
-                    <Pie
-                      data={taskStatusBreakdown}
-                      cx="50%" cy="50%"
-                      innerRadius={45}
-                      outerRadius={75}
-                      paddingAngle={3}
-                      dataKey="value"
+                {statusBreakdown.length === 0 ? (
+                  <EmptyState message="No tasks yet." />
+                ) : (
+                  <ResponsiveContainer width="100%" height={240}>
+                    <BarChart
+                      data={statusBreakdown}
+                      margin={{ top: 4, right: 0, left: -20, bottom: 0 }}
                     >
-                      {taskStatusBreakdown.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index]} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ background: "white", border: "1px solid #e5e7f0", borderRadius: 8, fontSize: 12 }} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="grid grid-cols-2 gap-y-2 gap-x-3 mt-2">
-                  {taskStatusBreakdown.map(({ name, value, color }) => (
-                    <div key={name} className="flex items-center gap-1.5">
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
-                      <span className="text-xs text-muted-foreground">{name}</span>
-                      <span className="text-xs font-semibold text-foreground ml-auto">{value}</span>
-                    </div>
-                  ))}
-                </div>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f5" vertical={false} />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fontSize: 10, fill: "#9ca3af" }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: "#9ca3af" }}
+                        axisLine={false}
+                        tickLine={false}
+                        allowDecimals={false}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          background: "white",
+                          border: "1px solid #e5e7f0",
+                          borderRadius: 8,
+                          fontSize: 12,
+                        }}
+                      />
+                      <Bar dataKey="value" name="Tasks" radius={[6, 6, 0, 0]} maxBarSize={48}>
+                        {statusBreakdown.map((entry, index) => (
+                          <Cell key={index} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
+        {/* Workload tab */}
         <TabsContent value="workload">
           <div className="grid grid-cols-12 gap-5">
             <Card className="col-span-12">
               <CardHeader>
                 <CardTitle>Team Workload Distribution</CardTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">Current capacity utilisation per team member</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Active (non-done) tasks per team member
+                </p>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={workloadDistributionData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f5" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} domain={[0, 100]} unit="%" />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#374151" }} axisLine={false} tickLine={false} width={120} />
-                    <Tooltip
-                      contentStyle={{ background: "white", border: "1px solid #e5e7f0", borderRadius: 8, fontSize: 12 }}
-                      formatter={(val) => [`${val}%`, "Workload"]}
-                    />
-                    <Bar dataKey="workload" radius={[0, 6, 6, 0]} maxBarSize={24}>
-                      {workloadDistributionData.map((entry, index) => (
-                        <Cell key={index} fill={entry.workload >= 85 ? "#f87171" : entry.workload >= 70 ? "#fbbf24" : "#4f46e5"} />
+                {workloadData.length === 0 ? (
+                  <EmptyState message="No active tasks assigned yet." />
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={Math.max(200, workloadData.length * 40)}>
+                      <BarChart
+                        data={workloadData}
+                        margin={{ top: 4, right: 0, left: -10, bottom: 0 }}
+                        layout="vertical"
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f5" horizontal={false} />
+                        <XAxis
+                          type="number"
+                          tick={{ fontSize: 10, fill: "#9ca3af" }}
+                          axisLine={false}
+                          tickLine={false}
+                          allowDecimals={false}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          tick={{ fontSize: 11, fill: "#374151" }}
+                          axisLine={false}
+                          tickLine={false}
+                          width={100}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            background: "white",
+                            border: "1px solid #e5e7f0",
+                            borderRadius: 8,
+                            fontSize: 12,
+                          }}
+                          formatter={(val) => [`${val} tasks`, "Active tasks"]}
+                        />
+                        <Bar dataKey="workload" radius={[0, 6, 6, 0]} maxBarSize={24}>
+                          {workloadData.map((entry, index) => (
+                            <Cell
+                              key={index}
+                              fill={
+                                entry.workload >= 8
+                                  ? "#f87171"
+                                  : entry.workload >= 5
+                                  ? "#fbbf24"
+                                  : "#4f46e5"
+                              }
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div className="flex items-center gap-6 mt-3">
+                      {[
+                        { color: "#f87171", label: "Heavy (8+ tasks)" },
+                        { color: "#fbbf24", label: "Moderate (5–7)" },
+                        { color: "#4f46e5", label: "Light (<5)" },
+                      ].map(({ color, label }) => (
+                        <div
+                          key={label}
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                        >
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
+                          {label}
+                        </div>
                       ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-                <div className="flex items-center gap-6 mt-3">
-                  {[
-                    { color: "#f87171", label: "Overloaded (85%+)" },
-                    { color: "#fbbf24", label: "High (70–85%)" },
-                    { color: "#4f46e5", label: "Healthy (<70%)" },
-                  ].map(({ color, label }) => (
-                    <div key={label} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-                      {label}
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
+        {/* Velocity tab */}
         <TabsContent value="velocity">
           <div className="grid grid-cols-12 gap-5">
             <Card className="col-span-12">
               <CardHeader>
-                <CardTitle>Department Velocity</CardTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">Velocity score vs target · current sprint</p>
+                <CardTitle>Team Completion Rate</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Percentage of done tasks per team
+                </p>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={departmentVelocity} margin={{ top: 4, right: 0, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f5" vertical={false} />
-                    <XAxis dataKey="dept" tick={{ fontSize: 11, fill: "#374151" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} domain={[0, 100]} unit="%" />
-                    <Tooltip contentStyle={{ background: "white", border: "1px solid #e5e7f0", borderRadius: 8, fontSize: 12 }} />
-                    <Bar dataKey="velocity" name="Velocity" fill="#4f46e5" radius={[6, 6, 0, 0]} maxBarSize={48} />
-                    <Bar dataKey="target" name="Target" fill="#e5e7f0" radius={[6, 6, 0, 0]} maxBarSize={48} />
-                  </BarChart>
-                </ResponsiveContainer>
-                <div className="flex items-center gap-5 mt-3">
-                  {[{ color: "#4f46e5", label: "Velocity" }, { color: "#e5e7f0", label: "Target" }].map(({ color, label }) => (
-                    <div key={label} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-                      {label}
-                    </div>
-                  ))}
-                </div>
+                {velocityData.length === 0 ? (
+                  <EmptyState message="No team tasks found — assign tasks to teams to see velocity." />
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart
+                        data={velocityData}
+                        margin={{ top: 4, right: 0, left: -20, bottom: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f5" vertical={false} />
+                        <XAxis
+                          dataKey="dept"
+                          tick={{ fontSize: 11, fill: "#374151" }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 10, fill: "#9ca3af" }}
+                          axisLine={false}
+                          tickLine={false}
+                          domain={[0, 100]}
+                          unit="%"
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            background: "white",
+                            border: "1px solid #e5e7f0",
+                            borderRadius: 8,
+                            fontSize: 12,
+                          }}
+                          formatter={(val) => [`${val}%`, "Completion rate"]}
+                        />
+                        <Bar
+                          dataKey="velocity"
+                          name="Completion"
+                          fill="#4f46e5"
+                          radius={[6, 6, 0, 0]}
+                          maxBarSize={48}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
