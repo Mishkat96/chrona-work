@@ -1,11 +1,9 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "";
 
 // Warn at runtime (not at build time) when env vars are missing.
-// The store-context already falls back to mock data when requests fail,
-// so missing vars in dev just means offline mode — not a crash.
 if (!supabaseUrl || !supabaseKey) {
   console.warn(
     "[Chrona] Supabase env vars are not set. " +
@@ -14,7 +12,9 @@ if (!supabaseUrl || !supabaseKey) {
   );
 }
 
-export const supabase = createClient(
+// createBrowserClient (from @supabase/ssr) stores the session in cookies
+// instead of localStorage, so the middleware can read it server-side.
+export const supabase = createBrowserClient(
   supabaseUrl  || "https://placeholder.supabase.co",
   supabaseKey  || "placeholder-key"
 );
