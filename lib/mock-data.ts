@@ -22,6 +22,8 @@ export interface User {
   tasksCompleted: number;
   availability: number;   // scheduled hours per week
   email: string;
+  /** Supabase auth.users.id — populated after first sign-in (Phase 5). */
+  authId?: string;
 }
 
 export const users: User[] = [

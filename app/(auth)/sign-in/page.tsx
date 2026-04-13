@@ -2,12 +2,46 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Mail, Lock, Sparkles } from "lucide-react";
+import { ArrowRight, Mail, Lock, Sparkles, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { signInWithEmail, signInWithGoogle } from "@/lib/auth";
 
 export default function SignInPage() {
   const router = useRouter();
+  const [email,    setEmail]    = useState("");
+  const [password, setPassword] = useState("");
+  const [error,    setError]    = useState<string | null>(null);
+  const [loading,  setLoading]  = useState(false);
+
+  async function handleEmailSignIn(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    const { error: authError } = await signInWithEmail(email.trim(), password);
+
+    if (authError) {
+      setError(authError.message);
+      setLoading(false);
+      return;
+    }
+
+    router.push("/dashboard");
+    router.refresh();
+  }
+
+  async function handleGoogleSignIn() {
+    setError(null);
+    setLoading(true);
+    const { error: authError } = await signInWithGoogle();
+    if (authError) {
+      setError(authError.message);
+      setLoading(false);
+    }
+    // On success, Supabase redirects to /auth/callback — no manual push needed.
+  }
 
   return (
     <motion.div
@@ -26,10 +60,20 @@ export default function SignInPage() {
           <p className="text-sm text-muted-foreground">Sign in to your Chrona Work account</p>
         </div>
 
-        {/* Social sign-in */}
+        {/* Error banner */}
+        {error && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm mb-6">
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Google sign-in */}
         <button
-          onClick={() => router.push("/dashboard")}
-          className="w-full flex items-center justify-center gap-3 h-10 rounded-lg border border-border bg-white hover:bg-muted text-sm font-medium text-foreground transition-colors mb-6"
+          type="button"
+          onClick={handleGoogleSignIn}
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-3 h-10 rounded-lg border border-border bg-white hover:bg-muted text-sm font-medium text-foreground transition-colors mb-6 disabled:opacity-60"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -49,8 +93,8 @@ export default function SignInPage() {
           </div>
         </div>
 
-        {/* Form */}
-        <div className="space-y-4">
+        {/* Email / password form */}
+        <form onSubmit={handleEmailSignIn} className="space-y-4">
           <div>
             <label className="text-xs font-semibold text-foreground block mb-1.5">Work email</label>
             <div className="relative">
@@ -58,34 +102,42 @@ export default function SignInPage() {
               <input
                 type="email"
                 placeholder="you@company.com"
-                defaultValue="sarah@acmecorp.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
                 className="w-full h-10 pl-9 pr-3 rounded-lg border border-border bg-white text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-colors"
               />
             </div>
           </div>
+
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-semibold text-foreground">Password</label>
-              <a href="#" className="text-xs text-indigo-600 hover:text-indigo-500">Forgot password?</a>
+              <Link href="/forgot-password" className="text-xs text-indigo-600 hover:text-indigo-500">
+                Forgot password?
+              </Link>
             </div>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="password"
                 placeholder="••••••••"
-                defaultValue="password123"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
                 className="w-full h-10 pl-9 pr-3 rounded-lg border border-border bg-white text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-colors"
               />
             </div>
           </div>
 
           <Button
-            onClick={() => router.push("/dashboard")}
+            type="submit"
+            disabled={loading}
             className="w-full h-10 shadow-md shadow-indigo-500/20"
           >
-            Sign in <ArrowRight className="w-4 h-4" />
+            {loading ? "Signing in…" : <>Sign in <ArrowRight className="w-4 h-4" /></>}
           </Button>
-        </div>
+        </form>
 
         <p className="text-center text-sm text-muted-foreground mt-6">
           Don&apos;t have an account?{" "}

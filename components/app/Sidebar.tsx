@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard, CheckSquare, Calendar, Users, BarChart3,
-  MessageSquareMore, Settings, Zap, ChevronDown, RotateCcw,
+  MessageSquareMore, Settings, Zap, ChevronDown, RotateCcw, LogOut,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -17,10 +18,21 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useTasks } from "@/lib/store-context";
+import { signOut } from "@/lib/auth";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router   = useRouter();
   const { visibleTasks, currentUser, users, resetDemo, switchUser } = useTasks();
+
+  // Dev switcher is only shown when running on localhost.
+  const [isLocalhost, setIsLocalhost] = useState(false);
+  useEffect(() => {
+    setIsLocalhost(
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1"
+    );
+  }, []);
 
   const blockedCount = visibleTasks.filter((t) => t.status === "blocked").length;
 
@@ -33,6 +45,12 @@ export function Sidebar() {
     { label: "Assistant", href: "/assistant", icon: MessageSquareMore, badge: "AI" },
     { label: "Settings",  href: "/settings",  icon: Settings },
   ];
+
+  async function handleSignOut() {
+    await signOut();
+    router.push("/sign-in");
+    router.refresh();
+  }
 
   return (
     <aside className="w-56 shrink-0 h-screen sticky top-0 flex flex-col border-r border-border bg-white overflow-hidden">
@@ -99,10 +117,11 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Current user + dev switcher */}
+      {/* Footer */}
       <div className="px-3 py-3 border-t border-border space-y-1.5">
-        {/* Dev user switcher */}
-        {users.length > 0 && (
+
+        {/* Dev user switcher — localhost only */}
+        {isLocalhost && users.length > 0 && (
           <div className="px-1">
             <p className="text-[10px] font-medium text-muted-foreground mb-1 px-1.5">
               Dev: viewing as
@@ -129,14 +148,41 @@ export function Sidebar() {
           </div>
         )}
 
-        <button
-          onClick={resetDemo}
-          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          title="Reset all tasks back to demo seed data"
-        >
-          <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-          Reset demo data
-        </button>
+        {/* Reset demo data button */}
+        {isLocalhost && (
+          <button
+            onClick={resetDemo}
+            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title="Reset all tasks back to demo seed data"
+          >
+            <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+            Reset demo data
+          </button>
+        )}
+
+        {/* Current user + sign-out */}
+        <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg">
+          <Avatar className="w-7 h-7 shrink-0">
+            <AvatarFallback className="text-xs font-semibold bg-indigo-100 text-indigo-700">
+              {currentUser?.initials ?? "?"}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-foreground truncate">
+              {currentUser?.name ?? "Loading…"}
+            </p>
+            <p className="text-[10px] text-muted-foreground capitalize">
+              {currentUser?.role ?? ""}
+            </p>
+          </div>
+          <button
+            onClick={handleSignOut}
+            title="Sign out"
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </aside>
   );

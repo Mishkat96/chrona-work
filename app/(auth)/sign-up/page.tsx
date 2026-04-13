@@ -2,12 +2,147 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Mail, Lock, User, Building2, Sparkles, CheckCircle2 } from "lucide-react";
+import {
+  ArrowRight, Mail, Lock, User, Building2, Sparkles,
+  CheckCircle2, AlertCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { signUpWithEmail, signInWithGoogle } from "@/lib/auth";
+import { fetchUserByEmail, createUserInDb } from "@/lib/repositories/users";
+import { createWorkspace } from "@/lib/repositories/workspaces";
+import { linkAuthId } from "@/lib/repositories/users";
+
+function getInitials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .slice(0, 2)
+    .join("");
+}
 
 export default function SignUpPage() {
   const router = useRouter();
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName,  setLastName]  = useState("");
+  const [company,   setCompany]   = useState("");
+  const [email,     setEmail]     = useState("");
+  const [password,  setPassword]  = useState("");
+  const [error,     setError]     = useState<string | null>(null);
+  const [loading,   setLoading]   = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+
+  async function handleSignUp(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+    const emailTrimmed = email.trim();
+
+    try {
+      const { data, error: authError } = await signUpWithEmail(
+        emailTrimmed,
+        password,
+        { name: fullName }
+      );
+
+      if (authError) {
+        setError(authError.message);
+        setLoading(false);
+        return;
+      }
+
+      const authUserId = data.user?.id;
+      if (!authUserId) {
+        setError("Sign-up failed — please try again.");
+        setLoading(false);
+        return;
+      }
+
+      // ── Link or create user record ────────────────────────────────────────
+      // Check if this email already has a user row (seed data, invite, etc.)
+      const existing = await fetchUserByEmail(emailTrimmed);
+
+      if (existing) {
+        // Link the new auth user to the existing app user row
+        await linkAuthId(existing.user.id, authUserId).catch(() => {/* non-fatal */});
+      } else {
+        // Brand new user — create a workspace and user row
+        const workspace = await createWorkspace(
+          company.trim() || `${fullName}'s Workspace`
+        );
+        await createUserInDb({
+          workspaceId: workspace.id,
+          authId:      authUserId,
+          name:        fullName,
+          email:       emailTrimmed,
+          role:        "admin",
+          initials:    getInitials(fullName),
+        });
+      }
+
+      // ── Redirect ──────────────────────────────────────────────────────────
+      if (data.session) {
+        // Email confirmation is disabled — session is live immediately.
+        router.push("/dashboard");
+        router.refresh();
+      } else {
+        // Supabase sent a confirmation email.
+        setEmailSent(true);
+        setLoading(false);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Something went wrong.";
+      setError(msg);
+      setLoading(false);
+    }
+  }
+
+  async function handleGoogleSignUp() {
+    setError(null);
+    setLoading(true);
+    const { error: authError } = await signInWithGoogle();
+    if (authError) {
+      setError(authError.message);
+      setLoading(false);
+    }
+    // On success, Supabase redirects to /auth/callback
+  }
+
+  // ── Email sent state ───────────────────────────────────────────────────────
+
+  if (emailSent) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="w-full max-w-md"
+      >
+        <div className="bg-white rounded-2xl border border-border shadow-sm p-10 text-center">
+          <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center mx-auto mb-4">
+            <Mail className="w-6 h-6 text-indigo-600" />
+          </div>
+          <h1 className="text-xl font-bold text-foreground mb-2">Check your inbox</h1>
+          <p className="text-sm text-muted-foreground mb-6">
+            We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Already confirmed?{" "}
+            <Link href="/sign-in" className="text-indigo-600 font-semibold hover:text-indigo-500">
+              Sign in
+            </Link>
+          </p>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // ── Main sign-up form ──────────────────────────────────────────────────────
 
   return (
     <div className="w-full max-w-5xl flex gap-12 items-start">
@@ -31,7 +166,7 @@ export default function SignUpPage() {
           {[
             "AI-powered task assignment and scheduling",
             "Real-time workload balancing across your team",
-            "Deadline risk detection — before it&apos;s too late",
+            "Deadline risk detection — before it's too late",
             "Analytics that actually improve planning",
           ].map((item) => (
             <li key={item} className="flex items-center gap-3 text-sm text-foreground/80">
@@ -68,10 +203,20 @@ export default function SignUpPage() {
             <p className="text-sm text-muted-foreground">Start your free 14-day trial. No credit card required.</p>
           </div>
 
-          {/* Social */}
+          {/* Error banner */}
+          {error && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm mb-5">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Google */}
           <button
-            onClick={() => router.push("/dashboard")}
-            className="w-full flex items-center justify-center gap-3 h-10 rounded-lg border border-border bg-white hover:bg-muted text-sm font-medium text-foreground transition-colors mb-5"
+            type="button"
+            onClick={handleGoogleSignUp}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-3 h-10 rounded-lg border border-border bg-white hover:bg-muted text-sm font-medium text-foreground transition-colors mb-5 disabled:opacity-60"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -91,7 +236,7 @@ export default function SignUpPage() {
             </div>
           </div>
 
-          <div className="space-y-4">
+          <form onSubmit={handleSignUp} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-foreground block mb-1.5">First name</label>
@@ -100,6 +245,9 @@ export default function SignUpPage() {
                   <input
                     type="text"
                     placeholder="Sarah"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    required
                     className="w-full h-10 pl-9 pr-3 rounded-lg border border-border bg-white text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-colors"
                   />
                 </div>
@@ -109,6 +257,9 @@ export default function SignUpPage() {
                 <input
                   type="text"
                   placeholder="Johnson"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  required
                   className="w-full h-10 px-3 rounded-lg border border-border bg-white text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-colors"
                 />
               </div>
@@ -121,6 +272,9 @@ export default function SignUpPage() {
                 <input
                   type="email"
                   placeholder="you@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
                   className="w-full h-10 pl-9 pr-3 rounded-lg border border-border bg-white text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-colors"
                 />
               </div>
@@ -133,6 +287,8 @@ export default function SignUpPage() {
                 <input
                   type="text"
                   placeholder="Acme Corp"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
                   className="w-full h-10 pl-9 pr-3 rounded-lg border border-border bg-white text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-colors"
                 />
               </div>
@@ -144,14 +300,22 @@ export default function SignUpPage() {
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
                   type="password"
-                  placeholder="Minimum 8 characters"
+                  placeholder="Minimum 6 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
                   className="w-full h-10 pl-9 pr-3 rounded-lg border border-border bg-white text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-colors"
                 />
               </div>
             </div>
 
-            <Button onClick={() => router.push("/dashboard")} className="w-full h-10 shadow-md shadow-indigo-500/20">
-              Create account <ArrowRight className="w-4 h-4" />
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full h-10 shadow-md shadow-indigo-500/20"
+            >
+              {loading ? "Creating account…" : <>Create account <ArrowRight className="w-4 h-4" /></>}
             </Button>
 
             <p className="text-xs text-muted-foreground text-center">
@@ -160,7 +324,7 @@ export default function SignUpPage() {
               and{" "}
               <a href="#" className="text-indigo-600 hover:underline">Privacy Policy</a>.
             </p>
-          </div>
+          </form>
 
           <p className="text-center text-sm text-muted-foreground mt-5">
             Already have an account?{" "}

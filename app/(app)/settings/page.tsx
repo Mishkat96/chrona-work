@@ -1,25 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   User, Building2, Bell, Shield, Zap, CreditCard, Globe2,
-  ChevronRight, Check
+  ChevronRight, Check, Users, UserPlus, Copy, Trash2, AlertCircle, CheckCircle2, X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useTasks } from "@/lib/store-context";
+import {
+  fetchInvites,
+  createInvite,
+  revokeInvite,
+  type Invite,
+} from "@/lib/repositories/invites";
+import type { UserRole } from "@/lib/mock-data";
+
+// ── Sidebar sections ──────────────────────────────────────────────────────────
 
 const settingsSections = [
-  { id: "profile", icon: User, label: "Profile" },
-  { id: "workspace", icon: Building2, label: "Workspace" },
-  { id: "notifications", icon: Bell, label: "Notifications" },
-  { id: "security", icon: Shield, label: "Security" },
-  { id: "ai", icon: Zap, label: "AI & Automation" },
-  { id: "billing", icon: CreditCard, label: "Billing" },
-  { id: "integrations", icon: Globe2, label: "Integrations" },
+  { id: "profile",      icon: User,       label: "Profile" },
+  { id: "workspace",    icon: Building2,  label: "Workspace" },
+  { id: "members",      icon: Users,      label: "Members" },
+  { id: "notifications",icon: Bell,       label: "Notifications" },
+  { id: "security",     icon: Shield,     label: "Security" },
+  { id: "ai",           icon: Zap,        label: "AI & Automation" },
+  { id: "billing",      icon: CreditCard, label: "Billing" },
+  { id: "integrations", icon: Globe2,     label: "Integrations" },
 ];
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
 
 function ToggleSwitch({ defaultChecked = false }: { defaultChecked?: boolean }) {
   const [on, setOn] = useState(defaultChecked);
@@ -54,13 +74,342 @@ function SettingRow({ label, desc, toggle = false, defaultChecked = false, value
 }
 
 const integrations = [
-  { name: "Slack", desc: "Send task updates and AI alerts to channels", connected: true },
-  { name: "Google Calendar", desc: "Sync scheduled blocks and meetings", connected: true },
-  { name: "Linear", desc: "Import issues and sync task status", connected: false },
-  { name: "Jira", desc: "Bi-directional task sync", connected: false },
-  { name: "GitHub", desc: "Link commits and PRs to tasks", connected: false },
-  { name: "Notion", desc: "Embed Chrona views in Notion pages", connected: false },
+  { name: "Slack",           desc: "Send task updates and AI alerts to channels",  connected: true },
+  { name: "Google Calendar", desc: "Sync scheduled blocks and meetings",            connected: true },
+  { name: "Linear",          desc: "Import issues and sync task status",            connected: false },
+  { name: "Jira",            desc: "Bi-directional task sync",                     connected: false },
+  { name: "GitHub",          desc: "Link commits and PRs to tasks",                connected: false },
+  { name: "Notion",          desc: "Embed Chrona views in Notion pages",           connected: false },
 ];
+
+const ROLE_COLORS: Record<string, string> = {
+  admin:    "bg-indigo-100 text-indigo-700",
+  manager:  "bg-violet-100 text-violet-700",
+  employee: "bg-slate-100 text-slate-600",
+};
+
+// ── Invite dialog ─────────────────────────────────────────────────────────────
+
+function InviteDialog({
+  onClose,
+  onInviteCreated,
+}: {
+  onClose: () => void;
+  onInviteCreated: (invite: Invite, link: string) => void;
+}) {
+  const { currentUser, workspaceId, teams } = useTasks();
+  const [email,   setEmail]   = useState("");
+  const [role,    setRole]    = useState<UserRole>("employee");
+  const [teamId,  setTeamId]  = useState<string>("none");
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!currentUser) return;
+    setError(null);
+    setLoading(true);
+
+    try {
+      const invite = await createInvite({
+        workspaceId,
+        email: email.trim(),
+        role,
+        teamId: teamId !== "none" ? teamId : undefined,
+        invitedById: currentUser.id,
+      });
+
+      const link = `${window.location.origin}/invite/${invite.id}`;
+      onInviteCreated(invite, link);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create invite.");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-base font-semibold text-foreground">Invite team member</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm mb-4">
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-foreground block mb-1.5">Email address</label>
+            <input
+              type="email"
+              placeholder="user@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full h-9 px-3 rounded-lg border border-border bg-white text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-foreground block mb-1.5">Role</label>
+            <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="employee">Employee</SelectItem>
+                <SelectItem value="manager">Manager</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-foreground block mb-1.5">Team <span className="font-normal text-muted-foreground">(optional)</span></label>
+            <Select value={teamId} onValueChange={setTeamId}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="No team" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No team</SelectItem>
+                {teams.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
+            <Button type="submit" className="flex-1" disabled={loading}>
+              {loading ? "Sending…" : <><UserPlus className="w-4 h-4 mr-1" /> Generate invite link</>}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Invite link dialog ────────────────────────────────────────────────────────
+
+function InviteLinkDialog({
+  invite,
+  link,
+  onClose,
+}: {
+  invite: Invite;
+  link: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  function copyLink() {
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div className="text-center mb-5">
+          <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-3">
+            <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+          </div>
+          <h2 className="text-base font-semibold text-foreground mb-1">Invite created!</h2>
+          <p className="text-sm text-muted-foreground">
+            Share this link with <strong>{invite.email}</strong>. It will add them to your workspace as{" "}
+            <span className="font-medium capitalize">{invite.role}</span>.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-muted border border-border mb-5">
+          <span className="text-xs text-foreground font-mono truncate flex-1">{link}</span>
+          <button
+            onClick={copyLink}
+            className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-500 shrink-0"
+          >
+            {copied ? <><Check className="w-3.5 h-3.5" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy</>}
+          </button>
+        </div>
+
+        <Button variant="outline" className="w-full" onClick={onClose}>Done</Button>
+      </div>
+    </div>
+  );
+}
+
+// ── Members section ───────────────────────────────────────────────────────────
+
+function MembersSection() {
+  const { users, teams, currentUser, workspaceId } = useTasks();
+  const [invites,      setInvites]      = useState<Invite[]>([]);
+  const [showDialog,   setShowDialog]   = useState(false);
+  const [createdInvite, setCreatedInvite] = useState<{ invite: Invite; link: string } | null>(null);
+
+  const isAdmin = currentUser?.role === "admin";
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    fetchInvites(workspaceId)
+      .then(setInvites)
+      .catch(() => {/* non-fatal */});
+  }, [workspaceId]);
+
+  function teamNameFor(teamId: string | null) {
+    if (!teamId) return null;
+    return teams.find((t) => t.id === teamId)?.name ?? null;
+  }
+
+  async function handleRevoke(inviteId: string) {
+    await revokeInvite(inviteId).catch(() => {/* non-fatal */});
+    setInvites((prev) => prev.filter((i) => i.id !== inviteId));
+  }
+
+  function handleInviteCreated(invite: Invite, link: string) {
+    setInvites((prev) => [invite, ...prev.filter((i) => i.id !== invite.id)]);
+    setShowDialog(false);
+    setCreatedInvite({ invite, link });
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Current members */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Members ({users.length})</CardTitle>
+            {isAdmin && (
+              <Button size="sm" onClick={() => setShowDialog(true)}>
+                <UserPlus className="w-4 h-4 mr-1.5" /> Invite member
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="divide-y divide-border">
+            {users.map((u) => {
+              const userTeams = teams.filter((t) => t.memberIds.includes(u.id));
+              return (
+                <div key={u.id} className="flex items-center gap-3 px-6 py-3">
+                  <Avatar className="w-8 h-8 shrink-0">
+                    <AvatarFallback className="text-xs font-semibold bg-indigo-100 text-indigo-700">
+                      {u.initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-foreground">{u.name}</p>
+                      {u.id === currentUser?.id && (
+                        <span className="text-[10px] text-muted-foreground">(you)</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {userTeams.length > 0 && (
+                      <span className="text-xs text-muted-foreground">{userTeams[0].name}</span>
+                    )}
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize ${ROLE_COLORS[u.role]}`}>
+                      {u.role}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Pending invites */}
+      {(invites.length > 0 || isAdmin) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Pending invites {invites.length > 0 && `(${invites.length})`}</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {invites.length === 0 ? (
+              <div className="px-6 py-4 text-sm text-muted-foreground">No pending invites.</div>
+            ) : (
+              <div className="divide-y divide-border">
+                {invites.map((inv) => {
+                  const teamName = teamNameFor(inv.teamId);
+                  return (
+                    <div key={inv.id} className="flex items-center gap-3 px-6 py-3">
+                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                        <Mail className="w-3.5 h-3.5 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{inv.email}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {teamName ? `${teamName} · ` : ""}{new Date(inv.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize ${ROLE_COLORS[inv.role]}`}>
+                          {inv.role}
+                        </span>
+                        {isAdmin && (
+                          <button
+                            onClick={() => {
+                              const link = `${window.location.origin}/invite/${inv.id}`;
+                              setCreatedInvite({ invite: inv, link });
+                            }}
+                            title="Copy invite link"
+                            className="p-1 rounded text-muted-foreground hover:text-indigo-600 transition-colors"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleRevoke(inv.id)}
+                            title="Revoke invite"
+                            className="p-1 rounded text-muted-foreground hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Dialogs */}
+      {showDialog && (
+        <InviteDialog
+          onClose={() => setShowDialog(false)}
+          onInviteCreated={handleInviteCreated}
+        />
+      )}
+      {createdInvite && (
+        <InviteLinkDialog
+          invite={createdInvite.invite}
+          link={createdInvite.link}
+          onClose={() => setCreatedInvite(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Missing import for Mail icon inside MembersSection ─────────────────────────
+import { Mail } from "lucide-react";
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState("profile");
@@ -86,41 +435,39 @@ export default function SettingsPage() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto space-y-5">
         {activeSection === "profile" && (
-          <>
-            <Card>
-              <CardHeader><CardTitle>Profile</CardTitle></CardHeader>
-              <CardContent className="space-y-5">
-                <div className="flex items-center gap-4">
-                  <Avatar className="w-16 h-16 text-xl">
-                    <AvatarFallback>SC</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <Button variant="outline" size="sm">Change photo</Button>
-                    <p className="text-xs text-muted-foreground mt-1.5">JPG, PNG up to 2MB</p>
+          <Card>
+            <CardHeader><CardTitle>Profile</CardTitle></CardHeader>
+            <CardContent className="space-y-5">
+              <div className="flex items-center gap-4">
+                <Avatar className="w-16 h-16 text-xl">
+                  <AvatarFallback>SC</AvatarFallback>
+                </Avatar>
+                <div>
+                  <Button variant="outline" size="sm">Change photo</Button>
+                  <p className="text-xs text-muted-foreground mt-1.5">JPG, PNG up to 2MB</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { label: "First name", value: "Sarah" },
+                  { label: "Last name",  value: "Chen" },
+                  { label: "Email",      value: "s.chen@acmecorp.com" },
+                  { label: "Role",       value: "Admin" },
+                ].map(({ label, value }) => (
+                  <div key={label}>
+                    <label className="text-xs font-semibold text-foreground block mb-1.5">{label}</label>
+                    <input
+                      defaultValue={value}
+                      className="w-full h-9 px-3 rounded-lg border border-border bg-white text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-colors"
+                    />
                   </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { label: "First name", value: "Sarah" },
-                    { label: "Last name", value: "Chen" },
-                    { label: "Email", value: "s.chen@acmecorp.com" },
-                    { label: "Role", value: "Admin" },
-                  ].map(({ label, value }) => (
-                    <div key={label}>
-                      <label className="text-xs font-semibold text-foreground block mb-1.5">{label}</label>
-                      <input
-                        defaultValue={value}
-                        className="w-full h-9 px-3 rounded-lg border border-border bg-white text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-colors"
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div className="pt-2">
-                  <Button>Save changes</Button>
-                </div>
-              </CardContent>
-            </Card>
-          </>
+                ))}
+              </div>
+              <div className="pt-2">
+                <Button>Save changes</Button>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {activeSection === "workspace" && (
@@ -130,13 +477,14 @@ export default function SettingsPage() {
               <div className="divide-y divide-border">
                 <SettingRow label="Workspace name" value="Acme Corp" />
                 <SettingRow label="Workspace URL" value="acmecorp.chrona.work" />
-                <SettingRow label="Team size" value="8 members" />
                 <SettingRow label="Default timezone" value="UTC +1" />
                 <SettingRow label="Working hours" value="09:00 – 18:00" />
               </div>
             </CardContent>
           </Card>
         )}
+
+        {activeSection === "members" && <MembersSection />}
 
         {activeSection === "notifications" && (
           <Card>

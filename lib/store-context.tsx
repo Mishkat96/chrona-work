@@ -50,6 +50,12 @@ import {
 } from "./supabase/config";
 import { genId, todayStr, nowIso } from "./store";
 import { getVisibleTasks } from "./permissions";
+import { supabase } from "./supabase/client";
+import {
+  fetchUserByAuthId,
+  fetchUserByEmail,
+  linkAuthId,
+} from "./repositories/users";
 
 // ── Dev user persistence ───────────────────────────────────────────────────────
 // Stores the active dev user ID so role switching survives page refreshes.
@@ -85,6 +91,7 @@ interface ContextValue {
   projects:     Project[];
   teams:        Team[];
   currentUser:  User | null;
+  workspaceId:  string;
   loading:      boolean;
   error:        string | null;
 
@@ -149,6 +156,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   const [projects,    setProjects]    = useState<Project[]>([]);
   const [teams,       setTeams]       = useState<Team[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [workspaceId, setWorkspaceId] = useState<string>(WORKSPACE_ID);
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState<string | null>(null);
 
@@ -157,20 +165,58 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function init() {
       try {
+        // ── Resolve which workspace to load ─────────────────────────────────
+        // Phase 5: prefer the authenticated session user; fall back to the
+        // dev-user switcher on localhost when no session is present.
+        let activeWorkspaceId = WORKSPACE_ID;
+        let resolvedUser: User | null = null;
+
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (session?.user) {
+          // 1. Look up by auth_id (fast path for returning users)
+          const byAuthId = await fetchUserByAuthId(session.user.id);
+          if (byAuthId) {
+            resolvedUser      = byAuthId.user;
+            activeWorkspaceId = byAuthId.workspaceId;
+          } else if (session.user.email) {
+            // 2. Email match (seed users + first sign-in for invited users)
+            const byEmail = await fetchUserByEmail(session.user.email);
+            if (byEmail) {
+              // Link auth_id so future look-ups use the fast path
+              await linkAuthId(byEmail.user.id, session.user.id).catch(() => {/* non-fatal */});
+              resolvedUser      = { ...byEmail.user, authId: session.user.id };
+              activeWorkspaceId = byEmail.workspaceId;
+            }
+            // If still not found: the sign-up page should have created the
+            // user + workspace row before redirecting here — this is a rare
+            // edge case (e.g., DB insert failed). We fall through to mock data.
+          }
+        }
+
         const [dbTasks, dbUsers, dbProjects, dbTeams] = await Promise.all([
-          fetchTasks(WORKSPACE_ID),
-          fetchUsers(WORKSPACE_ID),
-          fetchProjects(WORKSPACE_ID),
-          fetchTeams(WORKSPACE_ID),
+          fetchTasks(activeWorkspaceId),
+          fetchUsers(activeWorkspaceId),
+          fetchProjects(activeWorkspaceId),
+          fetchTeams(activeWorkspaceId),
         ]);
 
         setTasks(dbTasks);
         setUsers(dbUsers);
         setProjects(dbProjects);
         setTeams(dbTeams);
+        setWorkspaceId(activeWorkspaceId);
 
-        const me = dbUsers.find((u) => u.id === getDevUserId()) ?? dbUsers[0] ?? null;
-        setCurrentUser(me);
+        // If we resolved via session, use that user (refreshed from the DB
+        // list so counts / role are up-to-date).
+        if (resolvedUser) {
+          const fresh = dbUsers.find((u) => u.id === resolvedUser!.id) ?? resolvedUser;
+          setCurrentUser(fresh);
+        } else {
+          // No session — dev switcher / localhost fallback
+          const me = dbUsers.find((u) => u.id === getDevUserId()) ?? dbUsers[0] ?? null;
+          setCurrentUser(me);
+        }
       } catch (err) {
         console.warn(
           "Supabase unavailable — falling back to mock data. " +
@@ -206,6 +252,17 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
     }
 
     init();
+
+    // Listen for auth state changes so sign-out clears the current user
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event) => {
+        if (event === "SIGNED_OUT") {
+          setCurrentUser(null);
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
 
   // ── Derived: role-filtered task view ───────────────────────────────────────
@@ -586,6 +643,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         projects,
         teams,
         currentUser,
+        workspaceId,
         loading,
         error,
         createTask,
