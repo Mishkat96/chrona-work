@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
-  ChevronLeft, ChevronRight, Plus, X, Pencil, Trash2,
+  ChevronLeft, ChevronRight, Plus, Trash2,
   AlertTriangle, Clock, CalendarDays, Users, ZapOff,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -127,9 +126,9 @@ interface BlockDialogProps {
   plannerUsers: User[]; // users this person can assign to
   visibleTasks: Task[];
   workspaceId:  string;
-  onSave:       (draft: NewBlockDraft) => Promise<void>;
-  onUpdate:     (block: ScheduleBlock) => Promise<void>;
-  onDelete:     (id: string) => Promise<void>;
+  onSave:       (draft: NewBlockDraft) => Promise<unknown>;
+  onUpdate:     (block: ScheduleBlock) => Promise<unknown>;
+  onDelete:     (id: string) => Promise<unknown>;
 }
 
 function BlockDialog({
@@ -387,7 +386,7 @@ export default function PlannerPage() {
     loadWeekBlocks(weekStart);
   }, [weekStart, loadWeekBlocks]);
 
-  const todayStr = isoDate(new Date());
+  const todayStr = useMemo(() => isoDate(new Date()), []);
 
   // The 5 weekday Date objects for the current view
   const weekDays = useMemo(() =>
@@ -435,14 +434,26 @@ export default function PlannerPage() {
 
   const sidebarTasks = useMemo(() => {
     if (!currentUser) return [];
-    const uid = filterUserId !== "all" ? filterUserId : currentUser.id;
-    return unscheduledTasksForUser(visibleTasks, scheduleBlocks, uid);
-  }, [visibleTasks, scheduleBlocks, filterUserId, currentUser]);
+    if (filterUserId !== "all") {
+      return unscheduledTasksForUser(visibleTasks, scheduleBlocks, filterUserId);
+    }
+    // "All members" view — show unscheduled tasks for everyone in scope
+    const allowedIds = new Set(plannerUsers.map((u) => u.id));
+    return visibleTasks.filter((t) => {
+      if (t.status === "done") return false;
+      const scheduledIds = new Set(scheduleBlocks.filter((b) => b.taskId).map((b) => b.taskId!));
+      if (scheduledIds.has(t.id)) return false;
+      return allowedIds.has(t.primaryOwnerId) || t.collaboratorIds.some((id) => allowedIds.has(id));
+    });
+  }, [visibleTasks, scheduleBlocks, filterUserId, currentUser, plannerUsers]);
 
   const urgentTasks = useMemo(() => {
-    const uid = filterUserId !== "all" ? filterUserId : currentUser?.id;
-    return urgentUnscheduledTasks(visibleTasks, scheduleBlocks, uid);
-  }, [visibleTasks, scheduleBlocks, filterUserId, currentUser]);
+    if (filterUserId !== "all") {
+      return urgentUnscheduledTasks(visibleTasks, scheduleBlocks, filterUserId);
+    }
+    // "All members" view — pass undefined so selector returns all unscheduled urgent tasks in scope
+    return urgentUnscheduledTasks(visibleTasks, scheduleBlocks, undefined);
+  }, [visibleTasks, scheduleBlocks, filterUserId]);
 
   const capacitySummary = useMemo(() => {
     if (!canSeeTeam) return [];
@@ -476,18 +487,6 @@ export default function PlannerPage() {
     setPrefill(null);
     setDialogOpen(true);
   }
-
-  const handleSave = useCallback(async (draft: NewBlockDraft) => {
-    await createBlock(draft);
-  }, [createBlock]);
-
-  const handleUpdate = useCallback(async (block: ScheduleBlock) => {
-    await updateBlock(block);
-  }, [updateBlock]);
-
-  const handleDelete = useCallback(async (id: string) => {
-    await deleteBlock(id);
-  }, [deleteBlock]);
 
   if (!currentUser) return null;
 
@@ -875,9 +874,9 @@ export default function PlannerPage() {
         plannerUsers={plannerUsers}
         visibleTasks={visibleTasks}
         workspaceId={workspaceId}
-        onSave={handleSave}
-        onUpdate={handleUpdate}
-        onDelete={handleDelete}
+        onSave={createBlock}
+        onUpdate={updateBlock}
+        onDelete={deleteBlock}
       />
     </div>
   );

@@ -18,7 +18,7 @@ import { Progress } from "@/components/ui/progress";
 import { TaskStatusBadge } from "@/components/app/TaskStatusBadge";
 import { PriorityBadge } from "@/components/app/PriorityBadge";
 import { UserAvatar } from "@/components/app/UserAvatar";
-import { aiInsights, activityFeed, weeklyCompletionData } from "@/lib/mock-data";
+import { aiInsights, weeklyCompletionData } from "@/lib/mock-data";
 import { useTasks } from "@/lib/store-context";
 import { todayStr } from "@/lib/store";
 import { formatRelative } from "@/lib/utils";

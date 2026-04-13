@@ -622,28 +622,6 @@ export const aiInsights: AIInsight[] = [
   },
 ];
 
-// ─── Activity Feed ────────────────────────────────────────────────────────────
-
-export interface ActivityItem {
-  id: string;
-  actor: string;
-  action: string;
-  target: string;
-  time: string;
-  type: "task" | "comment" | "assign" | "complete" | "create";
-}
-
-export const activityFeed: ActivityItem[] = [
-  { id: "a1", actor: "James Kwon",    action: "completed",          target: "Set up CI/CD pipeline",         time: "2026-04-11T08:14:00", type: "complete" },
-  { id: "a2", actor: "Priya Nair",    action: "moved to in progress", target: "Q2 roadmap presentation",     time: "2026-04-11T07:50:00", type: "task" },
-  { id: "a3", actor: "Olivia Chen",   action: "logged 3h on",       target: "Redesign onboarding flow",      time: "2026-04-11T07:30:00", type: "task" },
-  { id: "a4", actor: "Aisha Okafor",  action: "created task",       target: "Refactor billing module",       time: "2026-04-10T17:20:00", type: "create" },
-  { id: "a5", actor: "Marcus Reid",   action: "commented on",       target: "Spring promo campaign",         time: "2026-04-10T16:45:00", type: "comment" },
-  { id: "a6", actor: "Sofia Alvarez", action: "assigned to herself", target: "Fix dashboard chart bug",      time: "2026-04-10T15:10:00", type: "assign" },
-  { id: "a7", actor: "David Park",    action: "updated status on",  target: "Churn risk follow-up calls",    time: "2026-04-10T14:00:00", type: "task" },
-  { id: "a8", actor: "Ethan Brooks",  action: "logged 2h on",       target: "Usage analytics dashboard",     time: "2026-04-10T13:30:00", type: "task" },
-];
-
 // ─── Analytics ────────────────────────────────────────────────────────────────
 
 export const weeklyCompletionData = [
@@ -657,34 +635,6 @@ export const weeklyCompletionData = [
   { week: "Mar W4", completed: 33, created: 30 },
   { week: "Apr W1", completed: 29, created: 28 },
   { week: "Apr W2", completed: 35, created: 31 },
-];
-
-export const workloadDistributionData = [
-  { name: "Olivia Chen",   workload: 92, tasks: 14 },
-  { name: "James Kwon",    workload: 78, tasks: 11 },
-  { name: "Aisha Okafor",  workload: 81, tasks: 12 },
-  { name: "Sofia Alvarez", workload: 67, tasks: 9  },
-  { name: "David Park",    workload: 60, tasks: 9  },
-  { name: "Priya Nair",    workload: 55, tasks: 8  },
-  { name: "Ethan Brooks",  workload: 44, tasks: 7  },
-  { name: "Marcus Reid",   workload: 38, tasks: 6  },
-];
-
-// 4-status breakdown — "Review" removed, merged into "In Progress"
-export const taskStatusBreakdown = [
-  { name: "Done",        value: 14, color: "#10b981" },
-  { name: "In Progress", value: 36, color: "#4f46e5" },
-  { name: "Blocked",     value: 5,  color: "#ef4444" },
-  { name: "Not Started", value: 17, color: "#94a3b8" },
-];
-
-export const departmentVelocity = [
-  { dept: "Engineering", velocity: 87, target: 80 },
-  { dept: "Design",      velocity: 72, target: 75 },
-  { dept: "Product",     velocity: 91, target: 85 },
-  { dept: "Marketing",   velocity: 65, target: 70 },
-  { dept: "Analytics",   velocity: 78, target: 75 },
-  { dept: "CS",          velocity: 84, target: 80 },
 ];
 
 // ─── Planner / Schedule ───────────────────────────────────────────────────────
