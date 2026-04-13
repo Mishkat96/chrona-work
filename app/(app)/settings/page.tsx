@@ -413,6 +413,7 @@ import { Mail } from "lucide-react";
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState("profile");
+  const { currentUser } = useTasks();
 
   return (
     <div className="flex gap-6 max-w-[1200px] h-[calc(100vh-88px)]">
@@ -440,28 +441,45 @@ export default function SettingsPage() {
             <CardContent className="space-y-5">
               <div className="flex items-center gap-4">
                 <Avatar className="w-16 h-16 text-xl">
-                  <AvatarFallback>SC</AvatarFallback>
+                  <AvatarFallback className="bg-indigo-100 text-indigo-700 text-lg font-bold">
+                    {currentUser?.initials ?? "?"}
+                  </AvatarFallback>
                 </Avatar>
                 <div>
-                  <Button variant="outline" size="sm">Change photo</Button>
-                  <p className="text-xs text-muted-foreground mt-1.5">JPG, PNG up to 2MB</p>
+                  <p className="text-sm font-semibold text-foreground">{currentUser?.name ?? "—"}</p>
+                  <p className="text-xs text-muted-foreground capitalize mt-0.5">{currentUser?.role}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                {[
-                  { label: "First name", value: "Sarah" },
-                  { label: "Last name",  value: "Chen" },
-                  { label: "Email",      value: "s.chen@acmecorp.com" },
-                  { label: "Role",       value: "Admin" },
-                ].map(({ label, value }) => (
-                  <div key={label}>
-                    <label className="text-xs font-semibold text-foreground block mb-1.5">{label}</label>
-                    <input
-                      defaultValue={value}
-                      className="w-full h-9 px-3 rounded-lg border border-border bg-white text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-colors"
-                    />
-                  </div>
-                ))}
+                <div>
+                  <label className="text-xs font-semibold text-foreground block mb-1.5">Name</label>
+                  <input
+                    defaultValue={currentUser?.name ?? ""}
+                    className="w-full h-9 px-3 rounded-lg border border-border bg-white text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-foreground block mb-1.5">Job title</label>
+                  <input
+                    defaultValue={currentUser?.jobTitle ?? ""}
+                    className="w-full h-9 px-3 rounded-lg border border-border bg-white text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-foreground block mb-1.5">Email</label>
+                  <input
+                    defaultValue={currentUser?.email ?? ""}
+                    readOnly
+                    className="w-full h-9 px-3 rounded-lg border border-border bg-muted/40 text-sm text-muted-foreground cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-foreground block mb-1.5">Department</label>
+                  <input
+                    defaultValue={currentUser?.department ?? ""}
+                    className="w-full h-9 px-3 rounded-lg border border-border bg-white text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-colors"
+                  />
+                </div>
               </div>
               <div className="pt-2">
                 <Button>Save changes</Button>
