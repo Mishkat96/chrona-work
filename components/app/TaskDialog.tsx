@@ -17,8 +17,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  users,
-  projects,
   type Task,
   type TaskStatus,
   type Priority,
@@ -43,8 +41,6 @@ const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
   { value: "medium",   label: "Medium" },
   { value: "low",      label: "Low" },
 ];
-
-const teamMembers = users.filter((u) => u.id !== "u0");
 
 function buildDefault(currentUserId: string): NewTaskDraft {
   return {
@@ -93,10 +89,12 @@ interface Props {
 }
 
 export function TaskDialog({ open, onOpenChange, task }: Props) {
-  const { createTask, updateTask, currentUser } = useTasks();
+  const { createTask, updateTask, currentUser, users, projects } = useTasks();
   const isEdit = !!task;
 
-  const [form, setForm] = useState<NewTaskDraft>(() => buildDefault(currentUser.id));
+  const teamMembers = users.filter((u) => u.id !== currentUser?.id);
+
+  const [form, setForm] = useState<NewTaskDraft>(() => buildDefault(currentUser?.id ?? ""));
   const [tagsInput, setTagsInput] = useState("");
 
   // Sync form when dialog opens
@@ -107,11 +105,11 @@ export function TaskDialog({ open, onOpenChange, task }: Props) {
         setForm(draft);
         setTagsInput(task.tags.join(", "));
       } else {
-        setForm(buildDefault(currentUser.id));
+        setForm(buildDefault(currentUser?.id ?? ""));
         setTagsInput("");
       }
     }
-  }, [open, task, currentUser.id]);
+  }, [open, task, currentUser?.id]);
 
   // Auto-fill teamId when project changes
   function handleProjectChange(projectId: string) {

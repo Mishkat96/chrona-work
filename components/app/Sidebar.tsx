@@ -8,14 +8,21 @@ import {
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useTasks } from "@/lib/store-context";
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { tasks, resetDemo } = useTasks();
+  const { visibleTasks, currentUser, users, resetDemo, switchUser } = useTasks();
 
-  const blockedCount = tasks.filter((t) => t.status === "blocked").length;
+  const blockedCount = visibleTasks.filter((t) => t.status === "blocked").length;
 
   const navItems = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -92,17 +99,36 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Current user + demo reset */}
-      <div className="px-3 py-3 border-t border-border space-y-1">
-        <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-muted transition-colors cursor-pointer">
-          <Avatar className="w-7 h-7 text-[11px]">
-            <AvatarFallback>SC</AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-foreground truncate">Sarah Chen</p>
-            <p className="text-xs text-muted-foreground">Admin</p>
+      {/* Current user + dev switcher */}
+      <div className="px-3 py-3 border-t border-border space-y-1.5">
+        {/* Dev user switcher */}
+        {users.length > 0 && (
+          <div className="px-1">
+            <p className="text-[10px] font-medium text-muted-foreground mb-1 px-1.5">
+              Dev: viewing as
+            </p>
+            <Select value={currentUser?.id ?? ""} onValueChange={switchUser}>
+              <SelectTrigger className="h-8 text-xs border-border bg-muted/60">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {users.map((u) => (
+                  <SelectItem key={u.id} value={u.id} className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                        u.role === "admin"   ? "bg-indigo-100 text-indigo-700" :
+                        u.role === "manager" ? "bg-violet-100 text-violet-700" :
+                        "bg-slate-100 text-slate-600"
+                      }`}>{u.role}</span>
+                      {u.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </div>
+        )}
+
         <button
           onClick={resetDemo}
           className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"

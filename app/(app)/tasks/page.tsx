@@ -32,11 +32,11 @@ import { TaskDialog } from "@/components/app/TaskDialog";
 import { TaskDetailPanel } from "@/components/app/TaskDetailPanel";
 import { useTasks } from "@/lib/store-context";
 import {
-  users,
-  projects,
   type Task,
   type TaskStatus,
   type Priority,
+  type User,
+  type Project,
 } from "@/lib/mock-data";
 import { todayStr } from "@/lib/store";
 
@@ -58,10 +58,14 @@ function TaskRow({
   task,
   selected,
   onClick,
+  users,
+  projects,
 }: {
   task: Task;
   selected: boolean;
   onClick: () => void;
+  users: User[];
+  projects: Project[];
 }) {
   const owner   = users.find((u) => u.id === task.primaryOwnerId);
   const project = projects.find((p) => p.id === task.projectId);
@@ -162,7 +166,7 @@ function TaskRow({
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function TasksPage() {
-  const { tasks } = useTasks();
+  const { visibleTasks: tasks, users, projects, loading } = useTasks();
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [createOpen, setCreateOpen]         = useState(false);
@@ -226,8 +230,6 @@ export default function TasksPage() {
     [tasks, today]
   );
 
-  const teamMembers = users.filter((u) => u.id !== "u0");
-
   const hasFilters =
     filterStatus !== "all" ||
     filterPriority !== "all" ||
@@ -241,6 +243,14 @@ export default function TasksPage() {
     setFilterPriority("all");
     setFilterOwner("all");
     setFilterOverdue(false);
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-88px)]">
+        <div className="text-sm text-muted-foreground">Loading tasks…</div>
+      </div>
+    );
   }
 
   return (
@@ -329,7 +339,7 @@ export default function TasksPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all" className="text-xs">All owners</SelectItem>
-                  {users.map((u) => (
+                  {users.map((u: User) => (
                     <SelectItem key={u.id} value={u.id} className="text-xs">
                       <div className="flex items-center gap-1.5">
                         <UserAvatar initials={u.initials} size="xs" />
@@ -389,6 +399,8 @@ export default function TasksPage() {
                     task={task}
                     selected={selectedTaskId === task.id}
                     onClick={() => handleSelectTask(task)}
+                    users={users}
+                    projects={projects}
                   />
                 ))}
                 {filtered.length === 0 && (

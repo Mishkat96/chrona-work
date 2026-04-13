@@ -24,8 +24,8 @@ import { PriorityBadge } from "@/components/app/PriorityBadge";
 import { UserAvatar } from "@/components/app/UserAvatar";
 import { TaskDialog } from "@/components/app/TaskDialog";
 import { useTasks } from "@/lib/store-context";
-import { users, projects, type Task, type TaskStatus } from "@/lib/mock-data";
-import { todayStr, nowIso, genId } from "@/lib/store";
+import { type Task, type TaskStatus } from "@/lib/mock-data";
+import { todayStr } from "@/lib/store";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -62,7 +62,7 @@ interface Props {
 }
 
 export function TaskDetailPanel({ task, onClose }: Props) {
-  const { updateTask, deleteTask, addComment, currentUser } = useTasks();
+  const { updateTask, deleteTask, addComment, currentUser, users, projects } = useTasks();
 
   const [editOpen, setEditOpen]       = useState(false);
   const [commentText, setCommentText] = useState("");
@@ -75,7 +75,7 @@ export function TaskDetailPanel({ task, onClose }: Props) {
   const project       = projects.find((p) => p.id === task.projectId);
   const collaborators = task.collaboratorIds
     .map((id) => users.find((u) => u.id === id))
-    .filter(Boolean) as (typeof users)[number][];
+    .filter(Boolean) as typeof users;
 
   const progress =
     task.estimatedHours > 0
@@ -99,19 +99,14 @@ export function TaskDetailPanel({ task, onClose }: Props) {
   function applyStatusChange(newStatus: TaskStatus, blockedReason: string | undefined) {
     const oldLabel = getStatusLabel(task.status);
     const newLabel = getStatusLabel(newStatus);
-    const activityEntry = {
-      id: genId("c"),
-      authorId: currentUser.id,
-      body: `Status changed from "${oldLabel}" to "${newLabel}".`,
-      createdAt: nowIso(),
-      type: "activity" as const,
-    };
-    updateTask({
-      ...task,
-      status: newStatus,
-      blockedReason: newStatus === "blocked" ? blockedReason : undefined,
-      comments: [...task.comments, activityEntry],
-    });
+    updateTask(
+      {
+        ...task,
+        status: newStatus,
+        blockedReason: newStatus === "blocked" ? blockedReason : undefined,
+      },
+      `Status changed from "${oldLabel}" to "${newLabel}".`
+    );
     setPendingBlocked(false);
     setBlockedInput("");
   }
