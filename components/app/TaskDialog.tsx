@@ -22,6 +22,7 @@ import {
   type Priority,
 } from "@/lib/mock-data";
 import { useTasks, type NewTaskDraft } from "@/lib/store-context";
+import { getScopedUsers } from "@/lib/permissions";
 import { todayStr } from "@/lib/store";
 import { UserAvatar } from "@/components/app/UserAvatar";
 import { cn } from "@/lib/utils";
@@ -89,10 +90,11 @@ interface Props {
 }
 
 export function TaskDialog({ open, onOpenChange, task }: Props) {
-  const { createTask, updateTask, currentUser, users, projects } = useTasks();
+  const { createTask, updateTask, currentUser, users, teams, projects } = useTasks();
   const isEdit = !!task;
 
-  const teamMembers = users.filter((u) => u.id !== currentUser?.id);
+  const scopedUsers        = currentUser ? getScopedUsers(currentUser, users, teams) : [];
+  const scopedCollaborators = scopedUsers.filter((u) => u.id !== currentUser?.id);
 
   const [form, setForm] = useState<NewTaskDraft>(() => buildDefault(currentUser?.id ?? ""));
   const [tagsInput, setTagsInput] = useState("");
@@ -249,7 +251,7 @@ export function TaskDialog({ open, onOpenChange, task }: Props) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.map((u) => (
+                  {scopedUsers.map((u) => (
                     <SelectItem key={u.id} value={u.id}>
                       <div className="flex items-center gap-2">
                         <UserAvatar initials={u.initials} size="xs" />
@@ -283,7 +285,7 @@ export function TaskDialog({ open, onOpenChange, task }: Props) {
           {/* Collaborators */}
           <Field label="Collaborators">
             <div className="flex flex-wrap gap-2 p-2 rounded-lg border border-border bg-card min-h-[42px]">
-              {teamMembers.map((u) => {
+              {scopedCollaborators.map((u) => {
                 const active = form.collaboratorIds.includes(u.id);
                 return (
                   <button

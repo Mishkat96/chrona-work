@@ -63,7 +63,16 @@ import {
   PROJECT_ID_MAP,
 } from "./supabase/config";
 import { genId, todayStr, nowIso } from "./store";
-import { getVisibleTasks } from "./permissions";
+import {
+  getVisibleTasks,
+  canAssignTaskToUser,
+  canEditTask,
+  canDeleteTask,
+  canManageWorkspace,
+  canManageTeam,
+  canChangeUserRole,
+  isAdmin,
+} from "./permissions";
 import { supabase } from "./supabase/client";
 import {
   fetchUserByAuthId,
@@ -331,6 +340,10 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   const createTask = useCallback(
     async (draft: NewTaskDraft): Promise<Task | null> => {
       if (!currentUser) return null;
+      if (!canAssignTaskToUser(currentUser, draft.primaryOwnerId, users, teams)) {
+        console.warn("createTask: not allowed to assign to this user");
+        return null;
+      }
 
       const optimisticId = genId("t");
       const now = todayStr();
@@ -362,7 +375,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         return optimistic;
       }
     },
-    [currentUser, workspaceId]
+    [currentUser, workspaceId, users, teams]
   );
 
   // ── updateTask ──────────────────────────────────────────────────────────────
@@ -370,6 +383,11 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   const updateTask = useCallback(
     async (updated: Task, activityMessage?: string): Promise<void> => {
       if (!currentUser) return;
+      const existing = tasks.find((t) => t.id === updated.id);
+      if (existing && !canEditTask(currentUser, existing, teams)) {
+        console.warn("updateTask: permission denied");
+        return;
+      }
 
       const optimisticComment: Comment | null = activityMessage
         ? {
@@ -420,19 +438,24 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         console.error("updateTask failed:", err);
       }
     },
-    [currentUser]
+    [currentUser, tasks, teams]
   );
 
   // ── deleteTask ──────────────────────────────────────────────────────────────
 
   const deleteTask = useCallback(async (id: string): Promise<void> => {
+    const existing = tasks.find((t) => t.id === id);
+    if (existing && !canDeleteTask(currentUser!, existing, teams)) {
+      console.warn("deleteTask: permission denied");
+      return;
+    }
     setTasks((prev) => prev.filter((t) => t.id !== id));
     try {
       await deleteTaskInDb(id);
     } catch (err) {
       console.error("deleteTask failed:", err);
     }
-  }, []);
+  }, [currentUser, tasks, teams]);
 
   // ── addComment ──────────────────────────────────────────────────────────────
 
@@ -531,7 +554,10 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   // ── resetDemo ───────────────────────────────────────────────────────────────
 
   const resetDemo = useCallback(async (): Promise<void> => {
-    if (!currentUser) return;
+    if (!currentUser || !isAdmin(currentUser)) {
+      console.warn("resetDemo: admin only");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -583,6 +609,10 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
 
   const createTeam = useCallback(
     async (draft: TeamDraft): Promise<Team | null> => {
+      if (!currentUser || !canManageWorkspace(currentUser)) {
+        console.warn("createTeam: permission denied");
+        return null;
+      }
       try {
         const team = await createTeamInDb(draft, workspaceId);
         setTeams((prev) => [...prev, team].sort((a, b) => a.name.localeCompare(b.name)));
@@ -592,13 +622,17 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         return null;
       }
     },
-    [workspaceId]
+    [currentUser, workspaceId]
   );
 
   // ── updateTeam ──────────────────────────────────────────────────────────────
 
   const updateTeam = useCallback(
     async (team: { id: string } & TeamDraft): Promise<void> => {
+      if (!currentUser || !canManageTeam(currentUser, team.id, teams)) {
+        console.warn("updateTeam: permission denied");
+        return;
+      }
       setTeams((prev) =>
         prev.map((t) =>
           t.id === team.id
@@ -612,13 +646,17 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         console.error("updateTeam failed:", err);
       }
     },
-    []
+    [currentUser, teams]
   );
 
   // ── addTeamMember ───────────────────────────────────────────────────────────
 
   const addTeamMember = useCallback(
     async (teamId: string, userId: string): Promise<void> => {
+      if (!currentUser || !canManageTeam(currentUser, teamId, teams)) {
+        console.warn("addTeamMember: permission denied");
+        return;
+      }
       setTeams((prev) =>
         prev.map((t) =>
           t.id === teamId && !t.memberIds.includes(userId)
@@ -632,13 +670,17 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         console.error("addTeamMember failed:", err);
       }
     },
-    []
+    [currentUser, teams]
   );
 
   // ── removeTeamMember ────────────────────────────────────────────────────────
 
   const removeTeamMember = useCallback(
     async (teamId: string, userId: string): Promise<void> => {
+      if (!currentUser || !canManageTeam(currentUser, teamId, teams)) {
+        console.warn("removeTeamMember: permission denied");
+        return;
+      }
       setTeams((prev) =>
         prev.map((t) =>
           t.id === teamId
@@ -652,7 +694,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         console.error("removeTeamMember failed:", err);
       }
     },
-    []
+    [currentUser, teams]
   );
 
   // ── switchUser (dev-only) ───────────────────────────────────────────────────
@@ -671,6 +713,10 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
 
   const updateUserRole = useCallback(
     async (userId: string, role: UserRole): Promise<void> => {
+      if (!currentUser || !canChangeUserRole(currentUser)) {
+        console.warn("updateUserRole: permission denied");
+        return;
+      }
       setUsers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, role } : u))
       );

@@ -17,7 +17,7 @@ export function canManageWorkspace(user: User): boolean {
   return user.role === "admin";
 }
 
-/** Admin can manage any team; manager can manage a team they lead. */
+/** Admin can manage any team; manager can manage only teams they lead. */
 export function canManageTeam(
   user: User,
   teamId: string,
@@ -30,24 +30,110 @@ export function canManageTeam(
   return false;
 }
 
+// ── Scope helpers ──────────────────────────────────────────────────────────────
+
+/** IDs of all teams this manager leads. Empty set for non-managers. */
+export function getManagedTeamIds(user: User, teams: Team[]): Set<string> {
+  if (user.role !== "manager") return new Set();
+  return new Set(teams.filter((t) => t.managerId === user.id).map((t) => t.id));
+}
+
+/**
+ * Users this actor is allowed to assign tasks to or add as collaborators.
+ *   admin    → all workspace users
+ *   manager  → self + all members of their managed teams
+ *   employee → self only
+ */
+export function getScopedUsers(
+  user: User,
+  users: User[],
+  teams: Team[]
+): User[] {
+  if (user.role === "admin") return users;
+
+  if (user.role === "manager") {
+    const managedIds = getManagedTeamIds(user, teams);
+    const memberIds = new Set(
+      teams
+        .filter((t) => managedIds.has(t.id))
+        .flatMap((t) => t.memberIds)
+    );
+    memberIds.add(user.id);
+    return users.filter((u) => memberIds.has(u.id));
+  }
+
+  // employee — self only
+  return users.filter((u) => u.id === user.id);
+}
+
+/**
+ * Can `actor` set a task's primary owner (or collaborator) to `targetUserId`?
+ * Delegates to getScopedUsers so the rule is defined in one place.
+ */
+export function canAssignTaskToUser(
+  actor: User,
+  targetUserId: string,
+  users: User[],
+  teams: Team[]
+): boolean {
+  return getScopedUsers(actor, users, teams).some((u) => u.id === targetUserId);
+}
+
+// ── Invite / role management ───────────────────────────────────────────────────
+
+/** Only admins may create invites. */
+export function canInviteUser(inviter: User): boolean {
+  return inviter.role === "admin";
+}
+
+/** Only admins may change any user's role. Prevents self-promotion. */
+export function canChangeUserRole(changer: User): boolean {
+  return changer.role === "admin";
+}
+
 // ── Task permissions ───────────────────────────────────────────────────────────
 
-export function canEditTask(user: User, task: Task): boolean {
-  if (user.role === "admin" || user.role === "manager") return true;
-  return (
-    task.primaryOwnerId === user.id ||
-    task.collaboratorIds.includes(user.id)
-  );
+/**
+ * Can `user` edit this task?
+ *   admin    → always
+ *   manager  → if task belongs to a team they manage, OR they own/collaborate
+ *   employee → if they are the primary owner or a collaborator
+ */
+export function canEditTask(user: User, task: Task, teams: Team[]): boolean {
+  if (user.role === "admin") return true;
+  if (task.primaryOwnerId === user.id || task.collaboratorIds.includes(user.id)) return true;
+  if (user.role === "manager") {
+    return getManagedTeamIds(user, teams).has(task.teamId);
+  }
+  return false;
 }
 
-export function canDeleteTask(user: User, task: Task): boolean {
-  if (user.role === "admin" || user.role === "manager") return true;
-  return task.creatorId === user.id;
+/**
+ * Can `user` delete this task?
+ * Same team-scoped rule as edit; employees may also delete tasks they created.
+ */
+export function canDeleteTask(user: User, task: Task, teams: Team[]): boolean {
+  if (user.role === "admin") return true;
+  if (task.creatorId === user.id) return true;
+  if (user.role === "manager") {
+    return getManagedTeamIds(user, teams).has(task.teamId);
+  }
+  return false;
 }
 
-/** Only admin and manager can reassign the primary owner of a task. */
-export function canReassignTask(user: User): boolean {
-  return user.role === "admin" || user.role === "manager";
+/**
+ * Can `user` reassign the primary owner of this task?
+ * Admins always; managers only within their managed team scope.
+ */
+export function canReassignTask(user: User, task: Task, teams: Team[]): boolean {
+  if (user.role === "admin") return true;
+  if (user.role === "manager") {
+    return (
+      getManagedTeamIds(user, teams).has(task.teamId) ||
+      task.primaryOwnerId === user.id
+    );
+  }
+  return false;
 }
 
 // ── Task visibility ────────────────────────────────────────────────────────────
@@ -67,9 +153,7 @@ export function getVisibleTasks(
   if (user.role === "admin") return tasks;
 
   if (user.role === "manager") {
-    const myTeamIds = new Set(
-      teams.filter((t) => t.managerId === user.id).map((t) => t.id)
-    );
+    const myTeamIds = getManagedTeamIds(user, teams);
     return tasks.filter(
       (t) =>
         myTeamIds.has(t.teamId) ||
