@@ -27,9 +27,11 @@ function mapWorkspace(row: DbWorkspace): Workspace {
  * Creates a new workspace (called during sign-up for the first user of a company).
  */
 export async function createWorkspace(name: string): Promise<Workspace> {
+  // workspaces.id has no DB default — generate UUID here
+  const id = crypto.randomUUID();
   const { data, error } = await supabase
     .from("workspaces")
-    .insert({ name, plan: "growth" })
+    .insert({ id, name, plan: "growth" })
     .select()
     .single();
 

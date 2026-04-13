@@ -46,6 +46,7 @@ export async function createTeamInDb(
   const { data: row, error } = await supabase
     .from("teams")
     .insert({
+      id:           crypto.randomUUID(),
       workspace_id: workspaceId,
       name:         draft.name,
       department:   draft.department,

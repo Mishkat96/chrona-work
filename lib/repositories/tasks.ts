@@ -101,6 +101,7 @@ export async function createTaskInDb(
   const { data: row, error } = await supabase
     .from("tasks")
     .insert({
+      id:               crypto.randomUUID(),
       workspace_id:     workspaceId,
       title:            draft.title,
       description:      draft.description,

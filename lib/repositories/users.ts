@@ -146,9 +146,12 @@ export interface NewUserDraft {
  * Used during sign-up when no existing user matches the email.
  */
 export async function createUserInDb(draft: NewUserDraft): Promise<User> {
+  // users.id has no DB default — generate UUID here
+  const id = crypto.randomUUID();
   const { data, error } = await supabase
     .from("users")
     .insert({
+      id,
       workspace_id:    draft.workspaceId,
       auth_id:         draft.authId,
       name:            draft.name,
