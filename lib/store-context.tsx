@@ -31,8 +31,13 @@ import {
   insertComment,
   deleteAllTasksInWorkspace,
 } from "./repositories/tasks";
-import { fetchUsers, updateUserRoleInDb }    from "./repositories/users";
+import {
+  fetchUsers,
+  updateUserRoleInDb,
+  createUserInDb,
+}                                            from "./repositories/users";
 import { fetchProjects }                     from "./repositories/projects";
+import { createWorkspace }                   from "./repositories/workspaces";
 import {
   fetchTeams,
   createTeamInDb,
@@ -187,10 +192,31 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
               await linkAuthId(byEmail.user.id, session.user.id).catch(() => {/* non-fatal */});
               resolvedUser      = { ...byEmail.user, authId: session.user.id };
               activeWorkspaceId = byEmail.workspaceId;
+            } else {
+              // 3. No user row found — new user after email confirmation.
+              //    Create their workspace + user record now.
+              try {
+                const meta      = session.user.user_metadata ?? {};
+                const fullName  = (meta.name as string | undefined) ?? session.user.email.split("@")[0];
+                const company   = (meta.company as string | undefined) ?? `${fullName}'s Workspace`;
+                const initials  = fullName.trim().split(/\s+/).map((w: string) => w[0]?.toUpperCase() ?? "").slice(0, 2).join("");
+
+                const ws      = await createWorkspace(company);
+                const newUser = await createUserInDb({
+                  workspaceId: ws.id,
+                  authId:      session.user.id,
+                  name:        fullName,
+                  email:       session.user.email,
+                  role:        "admin",
+                  initials,
+                });
+                resolvedUser      = newUser;
+                activeWorkspaceId = ws.id;
+              } catch (createErr) {
+                console.warn("Could not auto-create workspace for new user:", createErr);
+                // Fall through to dev-user fallback
+              }
             }
-            // If still not found: the sign-up page should have created the
-            // user + workspace row before redirecting here — this is a rare
-            // edge case (e.g., DB insert failed). We fall through to mock data.
           }
         }
 

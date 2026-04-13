@@ -47,7 +47,7 @@ export default function SignUpPage() {
       const { data, error: authError } = await signUpWithEmail(
         emailTrimmed,
         password,
-        { name: fullName }
+        { name: fullName, company: company.trim() || undefined }
       );
 
       if (authError) {
@@ -63,15 +63,23 @@ export default function SignUpPage() {
         return;
       }
 
-      // ── Link or create user record ────────────────────────────────────────
-      // Check if this email already has a user row (seed data, invite, etc.)
+      if (!data.session) {
+        // Email confirmation is required. Supabase will redirect to
+        // /auth/callback after the user clicks the link. The store-context
+        // will create the workspace + user row automatically at that point.
+        // Store name/company in auth metadata so the context can use them.
+        setEmailSent(true);
+        setLoading(false);
+        return;
+      }
+
+      // ── Session is live (email confirmation disabled) ─────────────────────
+      // Link or create user record now.
       const existing = await fetchUserByEmail(emailTrimmed);
 
       if (existing) {
-        // Link the new auth user to the existing app user row
         await linkAuthId(existing.user.id, authUserId).catch(() => {/* non-fatal */});
       } else {
-        // Brand new user — create a workspace and user row
         const workspace = await createWorkspace(
           company.trim() || `${fullName}'s Workspace`
         );
@@ -85,16 +93,8 @@ export default function SignUpPage() {
         });
       }
 
-      // ── Redirect ──────────────────────────────────────────────────────────
-      if (data.session) {
-        // Email confirmation is disabled — session is live immediately.
-        router.push("/dashboard");
-        router.refresh();
-      } else {
-        // Supabase sent a confirmation email.
-        setEmailSent(true);
-        setLoading(false);
-      }
+      router.push("/dashboard");
+      router.refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong.";
       setError(msg);
