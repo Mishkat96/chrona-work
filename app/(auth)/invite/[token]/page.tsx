@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { signUpWithEmail, signInWithEmail } from "@/lib/auth";
 import { fetchInviteByToken, acceptInvite, type Invite } from "@/lib/repositories/invites";
 import { fetchUserByEmail, createUserInDb, linkAuthId } from "@/lib/repositories/users";
+import { addTeamMemberInDb } from "@/lib/repositories/teams";
 
 function getInitials(name: string): string {
   return name.trim().split(/\s+/).map((w) => w[0]?.toUpperCase() ?? "").slice(0, 2).join("");
@@ -94,7 +95,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
         if (!authUserId) throw new Error("Sign-up failed — please try again.");
 
         // Create user row in the invited workspace
-        await createUserInDb({
+        const newUser = await createUserInDb({
           workspaceId: invite.workspaceId,
           authId:      authUserId,
           name:        name.trim(),
@@ -102,6 +103,11 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
           role:        invite.role,
           initials:    getInitials(name.trim()),
         });
+
+        // Add to the designated team if the invite specified one
+        if (invite.teamId) {
+          await addTeamMemberInDb(invite.teamId, newUser.id).catch(() => {/* non-fatal */});
+        }
 
         await acceptInvite(invite.id);
 
@@ -123,9 +129,11 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
 
         // Check if they already have a user row in this workspace
         const existing = await fetchUserByEmail(invite.email);
+        let targetUserId: string | null = existing?.user.id ?? null;
+
         if (!existing || existing.workspaceId !== invite.workspaceId) {
           // Add them to the invited workspace
-          await createUserInDb({
+          const created = await createUserInDb({
             workspaceId: invite.workspaceId,
             authId:      authUserId,
             name:        data.user?.user_metadata?.name ?? invite.email,
@@ -135,7 +143,14 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
           }).catch(async () => {
             // Row may already exist (e.g. seed data) — just link auth_id
             if (existing) await linkAuthId(existing.user.id, authUserId).catch(() => {/* ignore */});
+            return null;
           });
+          if (created) targetUserId = created.id;
+        }
+
+        // Add to the designated team if the invite specified one
+        if (invite.teamId && targetUserId) {
+          await addTeamMemberInDb(invite.teamId, targetUserId).catch(() => {/* non-fatal */});
         }
 
         await acceptInvite(invite.id);

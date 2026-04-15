@@ -45,7 +45,7 @@ import {
   markAllNotificationsRead,
   createNotificationInDb,
 }                                            from "./repositories/notifications";
-import { createWorkspace, fetchWorkspace }   from "./repositories/workspaces";
+import { createWorkspace, fetchWorkspace, updateWorkspaceName } from "./repositories/workspaces";
 import {
   fetchBlocksForWeek,
   createBlockInDb,
@@ -85,6 +85,8 @@ import {
   fetchUserByAuthId,
   fetchUserByEmail,
   linkAuthId,
+  updateUserProfile as updateUserProfileInDb,
+  type UserProfileDraft,
 } from "./repositories/users";
 
 // ── Dev user persistence ───────────────────────────────────────────────────────
@@ -105,7 +107,7 @@ function saveDevUserId(id: string): void {
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export type NewTaskDraft = Omit<Task, "id" | "createdAt" | "updatedAt" | "comments">;
-export type { NewBlockDraft };
+export type { NewBlockDraft, UserProfileDraft };
 
 export interface TeamDraft {
   name: string;
@@ -142,7 +144,9 @@ interface ContextValue {
   removeTeamMember: (teamId: string, userId: string) => Promise<void>;
 
   // ─ User management
-  updateUserRole: (userId: string, role: UserRole) => Promise<void>;
+  updateUserRole:    (userId: string, role: UserRole) => Promise<void>;
+  updateUserProfile: (draft: UserProfileDraft) => Promise<void>;
+  updateWorkspace:   (name: string) => Promise<void>;
   /** Dev-only: switch the active user without real auth. */
   switchUser: (userId: string) => void;
 
@@ -304,6 +308,14 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
             .catch(() => {/* non-fatal — bell will show empty */});
         }
       } catch (err) {
+        // In production: surface the error — do NOT silently fall back to mock data
+        if (process.env.NODE_ENV === "production") {
+          console.error("Database connection failed:", err);
+          setError("Unable to connect to the database. Please refresh the page.");
+          setLoading(false);
+          return;
+        }
+
         console.warn(
           "Supabase unavailable — falling back to mock data. " +
           "Run supabase/schema.sql and supabase/seed.sql to enable real persistence.",
@@ -794,10 +806,49 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
     [currentUser, teams]
   );
 
+  // ── updateUserProfile ───────────────────────────────────────────────────────
+
+  const updateUserProfile = useCallback(
+    async (draft: UserProfileDraft): Promise<void> => {
+      if (!currentUser) return;
+      // Optimistic update
+      const updated = { ...currentUser, ...draft };
+      setCurrentUser(updated);
+      setUsers((prev) => prev.map((u) => (u.id === currentUser.id ? updated : u)));
+      try {
+        await updateUserProfileInDb(currentUser.id, draft);
+      } catch (err) {
+        // Rollback on failure
+        setCurrentUser(currentUser);
+        setUsers((prev) => prev.map((u) => (u.id === currentUser.id ? currentUser : u)));
+        throw err;
+      }
+    },
+    [currentUser]
+  );
+
+  // ── updateWorkspace ─────────────────────────────────────────────────────────
+
+  const updateWorkspace = useCallback(
+    async (name: string): Promise<void> => {
+      if (!currentUser || currentUser.role !== "admin") return;
+      const prev = workspaceName;
+      setWorkspaceName(name);
+      try {
+        await updateWorkspaceName(workspaceId, name);
+      } catch (err) {
+        setWorkspaceName(prev);
+        throw err;
+      }
+    },
+    [currentUser, workspaceId, workspaceName]
+  );
+
   // ── switchUser (dev-only) ───────────────────────────────────────────────────
 
   const switchUser = useCallback(
     (userId: string) => {
+      if (process.env.NODE_ENV === "production") return;
       const user = users.find((u) => u.id === userId);
       if (!user) return;
       saveDevUserId(userId);
@@ -932,6 +983,8 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         addTeamMember,
         removeTeamMember,
         updateUserRole,
+        updateUserProfile,
+        updateWorkspace,
         switchUser,
         notifications,
         unreadCount,

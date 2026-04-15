@@ -128,6 +128,30 @@ export async function linkAuthId(
   if (error) throw error;
 }
 
+export interface UserProfileDraft {
+  name: string;
+  jobTitle: string;
+  department: string;
+  initials: string;
+}
+
+export async function updateUserProfile(
+  userId: string,
+  draft: UserProfileDraft
+): Promise<void> {
+  const { error } = await supabase
+    .from("users")
+    .update({
+      name:       draft.name,
+      job_title:  draft.jobTitle,
+      department: draft.department,
+      initials:   draft.initials,
+    })
+    .eq("id", userId);
+
+  if (error) throw error;
+}
+
 // ── Create ────────────────────────────────────────────────────────────────────
 
 export interface NewUserDraft {

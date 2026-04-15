@@ -39,6 +39,18 @@ export async function createWorkspace(name: string): Promise<Workspace> {
   return mapWorkspace(data);
 }
 
+export async function updateWorkspaceName(
+  id: string,
+  name: string
+): Promise<void> {
+  const { error } = await supabase
+    .from("workspaces")
+    .update({ name })
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
 export async function fetchWorkspace(id: string): Promise<Workspace | null> {
   const { data, error } = await supabase
     .from("workspaces")
