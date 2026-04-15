@@ -6,7 +6,6 @@ import type { Project } from "@/lib/mock-data";
 interface DbProject {
   id: string;
   workspace_id: string;
-  team_id: string | null;
   name: string;
   description: string;
   color: string;
@@ -18,12 +17,11 @@ interface DbProject {
 
 function mapProject(row: DbProject): Project {
   return {
-    id: row.id,
-    teamId: row.team_id ?? "",
-    name: row.name,
+    id:          row.id,
+    name:        row.name,
     description: row.description,
-    color: row.color,
-    status: row.status as Project["status"],
+    color:       row.color,
+    status:      row.status as Project["status"],
   };
 }
 

@@ -17,6 +17,7 @@ import {
   type Comment,
   type UserRole,
   type ScheduleBlock,
+  type Notification,
   // Static seed data kept as fallback if Supabase is unreachable
   users   as mockUsers,
   projects as mockProjects,
@@ -38,6 +39,12 @@ import {
   createUserInDb,
 }                                            from "./repositories/users";
 import { fetchProjects }                     from "./repositories/projects";
+import {
+  fetchNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  createNotificationInDb,
+}                                            from "./repositories/notifications";
 import { createWorkspace, fetchWorkspace }   from "./repositories/workspaces";
 import {
   fetchBlocksForWeek,
@@ -139,6 +146,12 @@ interface ContextValue {
   /** Dev-only: switch the active user without real auth. */
   switchUser: (userId: string) => void;
 
+  // ─ Notifications
+  notifications: Notification[];
+  unreadCount:   number;
+  markAsRead:    (id: string) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
+
   // ─ Planner / Schedule blocks
   scheduleBlocks: ScheduleBlock[];
   plannerLoading: boolean;
@@ -170,8 +183,7 @@ function buildMockFallback() {
   }));
   const mappedProjects = mockProjects.map((p) => ({
     ...p,
-    id:     PROJECT_ID_MAP[p.id] ?? p.id,
-    teamId: TEAM_ID_MAP[p.teamId] ?? p.teamId,
+    id: PROJECT_ID_MAP[p.id] ?? p.id,
   }));
   const mappedTeams = mockTeams.map((t) => ({
     ...t,
@@ -194,8 +206,9 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   const [workspaceName, setWorkspaceName] = useState<string>("");
   const [loading,       setLoading]       = useState(true);
   const [error,         setError]         = useState<string | null>(null);
-  const [scheduleBlocks, setScheduleBlocks] = useState<ScheduleBlock[]>([]);
-  const [plannerLoading, setPlannerLoading] = useState(false);
+  const [scheduleBlocks,  setScheduleBlocks]  = useState<ScheduleBlock[]>([]);
+  const [plannerLoading,  setPlannerLoading]  = useState(false);
+  const [notifications,   setNotifications]   = useState<Notification[]>([]);
 
   // ── Initial fetch ───────────────────────────────────────────────────────────
 
@@ -272,13 +285,23 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
 
         // If we resolved via session, use that user (refreshed from the DB
         // list so counts / role are up-to-date).
+        let activeUserId: string | null = null;
         if (resolvedUser) {
           const fresh = dbUsers.find((u) => u.id === resolvedUser!.id) ?? resolvedUser;
           setCurrentUser(fresh);
+          activeUserId = fresh.id;
         } else {
           // No session — dev switcher / localhost fallback
           const me = dbUsers.find((u) => u.id === getDevUserId()) ?? dbUsers[0] ?? null;
           setCurrentUser(me);
+          activeUserId = me?.id ?? null;
+        }
+
+        // Fetch notifications for the resolved user (non-fatal)
+        if (activeUserId) {
+          fetchNotifications(activeUserId, activeWorkspaceId)
+            .then(setNotifications)
+            .catch(() => {/* non-fatal — bell will show empty */});
         }
       } catch (err) {
         console.warn(
@@ -335,6 +358,38 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
     return getVisibleTasks(currentUser, tasks, teams);
   }, [tasks, currentUser, teams]);
 
+  // ── Derived: unread notification count ─────────────────────────────────────
+
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.read).length,
+    [notifications]
+  );
+
+  // ── markAsRead ──────────────────────────────────────────────────────────────
+
+  const markAsRead = useCallback(async (id: string): Promise<void> => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    );
+    try {
+      await markNotificationRead(id);
+    } catch (err) {
+      console.error("markAsRead failed:", err);
+    }
+  }, []);
+
+  // ── markAllAsRead ────────────────────────────────────────────────────────────
+
+  const markAllAsRead = useCallback(async (): Promise<void> => {
+    if (!currentUser) return;
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    try {
+      await markAllNotificationsRead(currentUser.id, workspaceId);
+    } catch (err) {
+      console.error("markAllAsRead failed:", err);
+    }
+  }, [currentUser, workspaceId]);
+
   // ── createTask ──────────────────────────────────────────────────────────────
 
   const createTask = useCallback(
@@ -369,6 +424,17 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         setTasks((prev) =>
           prev.map((t) => (t.id === optimisticId ? real : t))
         );
+        // Notify primary owner if they didn't create the task themselves
+        if (real.primaryOwnerId !== currentUser.id) {
+          createNotificationInDb({
+            workspaceId,
+            userId:  real.primaryOwnerId,
+            type:    "task_assigned",
+            title:   "New task assigned to you",
+            body:    `"${real.title}" was assigned to you by ${currentUser.name}`,
+            taskId:  real.id,
+          }).catch(() => {/* non-fatal */});
+        }
         return real;
       } catch (err) {
         console.error("createTask failed:", err);
@@ -415,6 +481,21 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
 
       try {
         await updateTaskInDb(updated);
+        // Notify task participants on status change (except the person making the change)
+        if (existing && existing.status !== updated.status) {
+          const recipients = [updated.primaryOwnerId, ...updated.collaboratorIds]
+            .filter((id) => id !== currentUser.id);
+          for (const userId of recipients) {
+            createNotificationInDb({
+              workspaceId,
+              userId,
+              type:   "task_status_changed",
+              title:  "Task status updated",
+              body:   `"${updated.title}" moved to ${updated.status.replace(/_/g, " ")}`,
+              taskId: updated.id,
+            }).catch(() => {/* non-fatal */});
+          }
+        }
         if (activityMessage && optimisticComment) {
           const real = await insertComment(
             updated.id,
@@ -438,7 +519,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         console.error("updateTask failed:", err);
       }
     },
-    [currentUser, tasks, teams]
+    [currentUser, tasks, teams, workspaceId]
   );
 
   // ── deleteTask ──────────────────────────────────────────────────────────────
@@ -497,11 +578,27 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
             };
           })
         );
+        // Notify task participants about the new comment
+        const task = tasks.find((t) => t.id === taskId);
+        if (task) {
+          const recipients = [task.primaryOwnerId, ...task.collaboratorIds]
+            .filter((id) => id !== currentUser.id);
+          for (const userId of recipients) {
+            createNotificationInDb({
+              workspaceId,
+              userId,
+              type:   "comment_added",
+              title:  "New comment on a task",
+              body:   `${currentUser.name} commented on "${task.title}"`,
+              taskId: task.id,
+            }).catch(() => {/* non-fatal */});
+          }
+        }
       } catch (err) {
         console.error("addComment failed:", err);
       }
     },
-    [currentUser]
+    [currentUser, tasks, workspaceId]
   );
 
   // ── logActivity ─────────────────────────────────────────────────────────────
@@ -836,6 +933,10 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         removeTeamMember,
         updateUserRole,
         switchUser,
+        notifications,
+        unreadCount,
+        markAsRead,
+        markAllAsRead,
         scheduleBlocks,
         plannerLoading,
         loadWeekBlocks,

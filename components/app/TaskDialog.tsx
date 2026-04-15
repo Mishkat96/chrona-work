@@ -113,10 +113,8 @@ export function TaskDialog({ open, onOpenChange, task }: Props) {
     }
   }, [open, task, currentUser?.id]);
 
-  // Auto-fill teamId when project changes
   function handleProjectChange(projectId: string) {
-    const proj = projects.find((p) => p.id === projectId);
-    setForm((f) => ({ ...f, projectId, teamId: proj?.teamId ?? "" }));
+    setForm((f) => ({ ...f, projectId }));
   }
 
   function toggleCollaborator(userId: string) {
@@ -281,6 +279,26 @@ export function TaskDialog({ open, onOpenChange, task }: Props) {
               </Select>
             </Field>
           </div>
+
+          {/* Team */}
+          <Field label="Team">
+            <Select
+              value={form.teamId || "none"}
+              onValueChange={(v) => setForm((f) => ({ ...f, teamId: v === "none" ? "" : v }))}
+            >
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="Select team" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No team</SelectItem>
+                {teams.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
 
           {/* Collaborators */}
           <Field label="Collaborators">

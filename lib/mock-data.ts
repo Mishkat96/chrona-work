@@ -224,7 +224,6 @@ export const teams: Team[] = [
 export interface Project {
   id: string;
   name: string;
-  teamId: string;
   description: string;
   color: string;  // Tailwind colour key, e.g. "indigo"
   status: "active" | "paused" | "completed";
@@ -234,7 +233,6 @@ export const projects: Project[] = [
   {
     id: "proj-platform-v24",
     name: "Platform v2.4",
-    teamId: "team-eng",
     description: "Core platform stability and feature work for Q2.",
     color: "indigo",
     status: "active",
@@ -242,7 +240,6 @@ export const projects: Project[] = [
   {
     id: "proj-platform-sec",
     name: "Platform Security",
-    teamId: "team-eng",
     description: "Security hardening: rate limiting, auth modernisation.",
     color: "red",
     status: "active",
@@ -250,7 +247,6 @@ export const projects: Project[] = [
   {
     id: "proj-product-v24",
     name: "Product v2.4",
-    teamId: "team-design",
     description: "Onboarding and UX improvements for v2.4.",
     color: "violet",
     status: "active",
@@ -258,7 +254,6 @@ export const projects: Project[] = [
   {
     id: "proj-design-sys",
     name: "Design System",
-    teamId: "team-design",
     description: "Component audit and documentation.",
     color: "purple",
     status: "active",
@@ -266,7 +261,6 @@ export const projects: Project[] = [
   {
     id: "proj-q-plan",
     name: "Quarterly Planning",
-    teamId: "team-product",
     description: "Q2 roadmap, competitive analysis.",
     color: "blue",
     status: "active",
@@ -274,7 +268,6 @@ export const projects: Project[] = [
   {
     id: "proj-mkt-q2",
     name: "Marketing Q2",
-    teamId: "team-mkt",
     description: "Spring campaigns and content.",
     color: "amber",
     status: "active",
@@ -282,7 +275,6 @@ export const projects: Project[] = [
   {
     id: "proj-data-plat",
     name: "Data Platform",
-    teamId: "team-data",
     description: "Internal analytics tooling.",
     color: "emerald",
     status: "active",
@@ -290,7 +282,6 @@ export const projects: Project[] = [
   {
     id: "proj-cs-q2",
     name: "CS Q2",
-    teamId: "team-cs",
     description: "Customer success and retention.",
     color: "rose",
     status: "active",
@@ -621,6 +612,26 @@ export const aiInsights: AIInsight[] = [
     action: "Create pair session",
   },
 ];
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+export type NotificationType =
+  | "task_assigned"
+  | "task_status_changed"
+  | "comment_added";
+
+export interface Notification {
+  id: string;
+  workspaceId: string;
+  /** Recipient user ID. */
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  taskId?: string;
+  read: boolean;
+  createdAt: string;
+}
 
 // ─── Analytics ────────────────────────────────────────────────────────────────
 
