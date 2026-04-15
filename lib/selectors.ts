@@ -68,7 +68,13 @@ export function getTeamTasks(tasks: Task[], teamId: string): Task[] {
   return tasks.filter((t) => t.teamId === teamId);
 }
 
-/** Tasks for all teams managed by a user (union, deduped). */
+/**
+ * All tasks visible to a manager:
+ *   - tasks on any team they lead
+ *   - tasks they are the primary owner of
+ *   - tasks they collaborate on
+ * Mirrors the same union used by getVisibleTasks in permissions.ts.
+ */
 export function getManagedTeamTasks(
   tasks: Task[],
   teams: Team[],
@@ -77,7 +83,12 @@ export function getManagedTeamTasks(
   const teamIds = new Set(
     teams.filter((t) => t.managerId === managerId).map((t) => t.id)
   );
-  return tasks.filter((t) => teamIds.has(t.teamId));
+  return tasks.filter(
+    (t) =>
+      teamIds.has(t.teamId) ||
+      t.primaryOwnerId === managerId ||
+      t.collaboratorIds.includes(managerId)
+  );
 }
 
 // ── Stats ──────────────────────────────────────────────────────────────────────
